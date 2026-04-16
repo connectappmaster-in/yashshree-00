@@ -1,39 +1,49 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
-import { loginFn, logoutFn } from "./auth.functions";
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import type { User } from "@supabase/supabase-js";
 
 interface AuthState {
   isAuthenticated: boolean;
-  username: string | null;
-  login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  user: User | null;
+  isReady: boolean;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
 
-export function AuthProvider({
-  children,
-  initialAuth,
-}: {
-  children: ReactNode;
-  initialAuth: { isAuthenticated: boolean; username: string | null };
-}) {
-  const [auth, setAuth] = useState(initialAuth);
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
-  const login = useCallback(async (username: string, password: string) => {
-    const result = await loginFn({ data: { username, password } });
-    if (result.success) {
-      setAuth({ isAuthenticated: true, username });
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setIsReady(true);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const login = useCallback(async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      return { success: false as const, error: error.message };
     }
-    return result;
+    return { success: true as const };
   }, []);
 
   const logout = useCallback(async () => {
-    await logoutFn();
-    setAuth({ isAuthenticated: false, username: null });
+    await supabase.auth.signOut();
+    setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ ...auth, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated: !!user, user, isReady, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
