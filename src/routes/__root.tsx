@@ -2,7 +2,6 @@ import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/r
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/lib/auth-context";
-import { getAuthFn } from "@/lib/auth.functions";
 import { useState } from "react";
 
 function NotFoundComponent() {
@@ -42,10 +41,6 @@ export const Route = createRootRoute({
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" },
     ],
   }),
-  loader: async () => {
-    const auth = await getAuthFn();
-    return { auth };
-  },
   shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
@@ -66,12 +61,11 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
-  const { auth } = Route.useLoaderData();
   const [queryClient] = useState(() => new QueryClient());
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider initialAuth={auth}>
+      <AuthProvider>
         <Outlet />
         <Toaster richColors position="top-right" />
       </AuthProvider>

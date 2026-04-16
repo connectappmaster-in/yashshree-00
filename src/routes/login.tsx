@@ -14,7 +14,7 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -29,7 +29,7 @@ function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      const result = await login(username, password);
+      const result = await login(email, password);
       if (result.success) {
         navigate({ to: "/" });
       } else {
@@ -60,12 +60,13 @@ function LoginPage() {
               </div>
             )}
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="email">Email</Label>
               <Input
-                id="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="admin"
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@yashshree.com"
                 required
               />
             </div>
