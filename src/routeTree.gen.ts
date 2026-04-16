@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedWhatsappLogsRouteImport } from './routes/_authenticated/whatsapp-logs'
 import { Route as AuthenticatedTeachersRouteImport } from './routes/_authenticated/teachers'
+import { Route as AuthenticatedStudentsFeesRouteImport } from './routes/_authenticated/students-fees'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedAttendanceRouteImport } from './routes/_authenticated/attendance'
@@ -43,6 +44,12 @@ const AuthenticatedTeachersRoute = AuthenticatedTeachersRouteImport.update({
   path: '/teachers',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedStudentsFeesRoute =
+  AuthenticatedStudentsFeesRouteImport.update({
+    id: '/students-fees',
+    path: '/students-fees',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedReportsRoute = AuthenticatedReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
@@ -65,6 +72,7 @@ export interface FileRoutesByFullPath {
   '/attendance': typeof AuthenticatedAttendanceRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/reports': typeof AuthenticatedReportsRoute
+  '/students-fees': typeof AuthenticatedStudentsFeesRoute
   '/teachers': typeof AuthenticatedTeachersRoute
   '/whatsapp-logs': typeof AuthenticatedWhatsappLogsRoute
 }
@@ -74,6 +82,7 @@ export interface FileRoutesByTo {
   '/attendance': typeof AuthenticatedAttendanceRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/reports': typeof AuthenticatedReportsRoute
+  '/students-fees': typeof AuthenticatedStudentsFeesRoute
   '/teachers': typeof AuthenticatedTeachersRoute
   '/whatsapp-logs': typeof AuthenticatedWhatsappLogsRoute
 }
@@ -85,6 +94,7 @@ export interface FileRoutesById {
   '/_authenticated/attendance': typeof AuthenticatedAttendanceRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
+  '/_authenticated/students-fees': typeof AuthenticatedStudentsFeesRoute
   '/_authenticated/teachers': typeof AuthenticatedTeachersRoute
   '/_authenticated/whatsapp-logs': typeof AuthenticatedWhatsappLogsRoute
 }
@@ -96,6 +106,7 @@ export interface FileRouteTypes {
     | '/attendance'
     | '/dashboard'
     | '/reports'
+    | '/students-fees'
     | '/teachers'
     | '/whatsapp-logs'
   fileRoutesByTo: FileRoutesByTo
@@ -105,6 +116,7 @@ export interface FileRouteTypes {
     | '/attendance'
     | '/dashboard'
     | '/reports'
+    | '/students-fees'
     | '/teachers'
     | '/whatsapp-logs'
   id:
@@ -115,6 +127,7 @@ export interface FileRouteTypes {
     | '/_authenticated/attendance'
     | '/_authenticated/dashboard'
     | '/_authenticated/reports'
+    | '/_authenticated/students-fees'
     | '/_authenticated/teachers'
     | '/_authenticated/whatsapp-logs'
   fileRoutesById: FileRoutesById
@@ -162,6 +175,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTeachersRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/students-fees': {
+      id: '/_authenticated/students-fees'
+      path: '/students-fees'
+      fullPath: '/students-fees'
+      preLoaderRoute: typeof AuthenticatedStudentsFeesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/reports': {
       id: '/_authenticated/reports'
       path: '/reports'
@@ -190,6 +210,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedAttendanceRoute: typeof AuthenticatedAttendanceRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
+  AuthenticatedStudentsFeesRoute: typeof AuthenticatedStudentsFeesRoute
   AuthenticatedTeachersRoute: typeof AuthenticatedTeachersRoute
   AuthenticatedWhatsappLogsRoute: typeof AuthenticatedWhatsappLogsRoute
 }
@@ -198,6 +219,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAttendanceRoute: AuthenticatedAttendanceRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
+  AuthenticatedStudentsFeesRoute: AuthenticatedStudentsFeesRoute,
   AuthenticatedTeachersRoute: AuthenticatedTeachersRoute,
   AuthenticatedWhatsappLogsRoute: AuthenticatedWhatsappLogsRoute,
 }
@@ -214,3 +236,12 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
