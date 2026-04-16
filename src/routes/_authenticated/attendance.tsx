@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { format } from "date-fns";
+import { Badge } from "@/components/ui/badge";
+import { format, startOfMonth, endOfMonth } from "date-fns";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
   component: AttendancePage,
@@ -41,6 +42,18 @@ function AttendancePage() {
     },
   });
 
+  // Monthly attendance data
+  const monthStart = format(startOfMonth(new Date(date)), "yyyy-MM-dd");
+  const monthEnd = format(endOfMonth(new Date(date)), "yyyy-MM-dd");
+
+  const { data: monthlyAttendance = [] } = useQuery({
+    queryKey: ["attendance-monthly", monthStart],
+    queryFn: async () => {
+      const { data } = await supabase.from("attendance").select("*").gte("date", monthStart).lte("date", monthEnd);
+      return data || [];
+    },
+  });
+
   const filtered = students.filter((s) => {
     const matchClass = filterClass === "all" || s.class === filterClass;
     const matchBatch = filterBatch === "all" || s.batch === filterBatch;
@@ -56,6 +69,18 @@ function AttendancePage() {
   const toggleAttendance = (studentId: string) => {
     const current = getStatus(studentId);
     setAttendance((prev) => ({ ...prev, [studentId]: current === "present" ? "absent" : "present" }));
+  };
+
+  const selectAll = () => {
+    const newAtt: Record<string, "present" | "absent"> = {};
+    filtered.forEach((s) => { newAtt[s.id] = "present"; });
+    setAttendance((prev) => ({ ...prev, ...newAtt }));
+  };
+
+  const deselectAll = () => {
+    const newAtt: Record<string, "present" | "absent"> = {};
+    filtered.forEach((s) => { newAtt[s.id] = "absent"; });
+    setAttendance((prev) => ({ ...prev, ...newAtt }));
   };
 
   const saveMutation = useMutation({
@@ -75,17 +100,33 @@ function AttendancePage() {
       toast.success("Attendance saved");
       setAttendance({});
       queryClient.invalidateQueries({ queryKey: ["attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["attendance-monthly"] });
     },
     onError: (e) => toast.error(e.message),
   });
 
   const presentCount = filtered.filter((s) => getStatus(s.id) === "present").length;
 
+  // Monthly stats
+  const totalMonthDays = new Set(monthlyAttendance.map((a) => a.date)).size;
+  const monthlyPresentCount = monthlyAttendance.filter((a) => a.status === "present").length;
+  const monthlyTotalRecords = monthlyAttendance.length;
+  const monthlyPercentage = monthlyTotalRecords > 0 ? Math.round((monthlyPresentCount / monthlyTotalRecords) * 100) : 0;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold font-display">Attendance</h1>
-        <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+        <div>
+          <h1 className="text-2xl font-bold font-display">Attendance</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Monthly: <span className="font-semibold text-foreground">{monthlyPercentage}%</span> ({monthlyPresentCount}/{monthlyTotalRecords} records across {totalMonthDays} days)
+          </p>
+        </div>
+        <Button 
+          onClick={() => saveMutation.mutate()} 
+          disabled={saveMutation.isPending}
+          className="bg-secondary text-secondary-foreground hover:bg-secondary/90 font-bold"
+        >
           {saveMutation.isPending ? "Saving..." : "Save Attendance"}
         </Button>
       </div>
@@ -111,8 +152,12 @@ function AttendancePage() {
                 {BATCHES.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
               </SelectContent>
             </Select>
-            <div className="text-sm text-muted-foreground">
-              Present: <span className="font-bold text-foreground">{presentCount}/{filtered.length}</span>
+            <div className="flex gap-1.5">
+              <Button variant="outline" size="sm" className="text-xs" onClick={selectAll}>All Present</Button>
+              <Button variant="outline" size="sm" className="text-xs" onClick={deselectAll}>All Absent</Button>
+            </div>
+            <div className="text-sm text-muted-foreground ml-auto">
+              Present: <Badge variant={presentCount > 0 ? "default" : "secondary"} className="ml-1">{presentCount}/{filtered.length}</Badge>
             </div>
           </div>
         </CardHeader>
@@ -131,7 +176,7 @@ function AttendancePage() {
                 <TableRow><TableCell colSpan={4} className="text-center py-10 text-muted-foreground">No students found</TableCell></TableRow>
               ) : (
                 filtered.map((s) => (
-                  <TableRow key={s.id}>
+                  <TableRow key={s.id} className="hover:bg-muted/50 transition-colors">
                     <TableCell>
                       <Checkbox
                         checked={getStatus(s.id) === "present"}

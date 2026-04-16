@@ -15,7 +15,7 @@ export const Route = createFileRoute("/_authenticated/reports")({
 });
 
 const CLASSES = ["8th", "9th", "10th", "11th", "12th"];
-const MEDIUMS = ["Hindi", "English"];
+const MEDIUMS = ["Hindi", "English", "Marathi"];
 
 function ReportsPage() {
   const [filterClass, setFilterClass] = useState("all");
@@ -64,7 +64,7 @@ function ReportsPage() {
   });
 
   const exportCSV = (headers: string[], rows: string[][], filename: string) => {
-    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${c}"`).join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -74,8 +74,29 @@ function ReportsPage() {
     URL.revokeObjectURL(url);
   };
 
+  // Pending fees data
+  const pendingData = students.filter((s) => s.status === "active").map((s) => {
+    const paid = payments.filter((p) => p.student_id === s.id).reduce((sum, p) => sum + Number(p.amount), 0);
+    const total = Number(s.total_fees) - Number(s.discount);
+    return { ...s, paid, total, remaining: total - paid };
+  }).filter((s) => s.remaining > 0).sort((a, b) => b.remaining - a.remaining);
+
+  const totalPendingAmount = pendingData.reduce((sum, s) => sum + s.remaining, 0);
+
+  // Monthly collection
+  const monthPayments = payments.filter((p) => p.payment_date >= monthStart && p.payment_date <= monthEnd);
+  const monthTotal = monthPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+
+  // Teacher salary
+  const teacherSalaryData = teachers.map((t) => {
+    const count = lectures.filter((l) => l.teacher_id === t.id).length;
+    const salary = count * Number(t.per_lecture_fee);
+    return { ...t, count, salary };
+  });
+  const totalSalary = teacherSalaryData.reduce((sum, t) => sum + t.salary, 0);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <h1 className="text-2xl font-bold font-display">Reports</h1>
 
       <Tabs defaultValue="students">
@@ -120,7 +141,7 @@ function ReportsPage() {
                 </TableHeader>
                 <TableBody>
                   {filteredStudents.map((s) => (
-                    <TableRow key={s.id}>
+                    <TableRow key={s.id} className="hover:bg-muted/50 transition-colors">
                       <TableCell className="font-medium">{s.name}</TableCell>
                       <TableCell>{s.mobile}</TableCell>
                       <TableCell>{s.class}</TableCell>
@@ -136,7 +157,16 @@ function ReportsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="pending" className="mt-4">
+        <TabsContent value="pending" className="mt-4 space-y-4">
+          <div className="flex justify-end">
+            <Button variant="outline" size="sm" onClick={() => exportCSV(
+              ["Name", "Class", "Total Fees", "Paid", "Remaining"],
+              pendingData.map((s) => [s.name, s.class, String(s.total), String(s.paid), String(s.remaining)]),
+              "pending_fees.csv"
+            )}>
+              <Download className="h-4 w-4 mr-1" />Export CSV
+            </Button>
+          </div>
           <Card>
             <CardHeader><CardTitle className="font-display">Pending Fees</CardTitle></CardHeader>
             <CardContent className="p-0">
@@ -147,23 +177,21 @@ function ReportsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {students.filter((s) => s.status === "active").map((s) => {
-                    const paid = payments.filter((p) => p.student_id === s.id).reduce((sum, p) => sum + Number(p.amount), 0);
-                    const total = Number(s.total_fees) - Number(s.discount);
-                    const remaining = total - paid;
-                    if (remaining <= 0) return null;
-                    return (
-                      <TableRow key={s.id}>
-                        <TableCell className="font-medium">{s.name}</TableCell>
-                        <TableCell>{s.class}</TableCell>
-                        <TableCell className="text-right">₹{total.toLocaleString("en-IN")}</TableCell>
-                        <TableCell className="text-right">₹{paid.toLocaleString("en-IN")}</TableCell>
-                        <TableCell className="text-right font-bold">₹{remaining.toLocaleString("en-IN")}</TableCell>
-                      </TableRow>
-                    );
-                  })}
+                  {pendingData.map((s) => (
+                    <TableRow key={s.id} className="hover:bg-muted/50 transition-colors">
+                      <TableCell className="font-medium">{s.name}</TableCell>
+                      <TableCell>{s.class}</TableCell>
+                      <TableCell className="text-right">₹{s.total.toLocaleString("en-IN")}</TableCell>
+                      <TableCell className="text-right">₹{s.paid.toLocaleString("en-IN")}</TableCell>
+                      <TableCell className="text-right font-bold text-destructive">₹{s.remaining.toLocaleString("en-IN")}</TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
+              <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/30 font-bold text-sm">
+                <span>Total ({pendingData.length} students)</span>
+                <span className="text-destructive">₹{totalPendingAmount.toLocaleString("en-IN")}</span>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -171,6 +199,16 @@ function ReportsPage() {
         <TabsContent value="collection" className="mt-4 space-y-4">
           <div className="flex items-center gap-3">
             <input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} className="border rounded-md px-3 py-2 text-sm bg-background" />
+            <Button variant="outline" size="sm" onClick={() => exportCSV(
+              ["Date", "Student", "Mode", "Amount"],
+              monthPayments.map((p) => {
+                const student = students.find((s) => s.id === p.student_id);
+                return [format(new Date(p.payment_date), "dd MMM yyyy"), student?.name || "—", p.payment_mode, String(Number(p.amount))];
+              }),
+              `collection_${reportMonth}.csv`
+            )}>
+              <Download className="h-4 w-4 mr-1" />Export CSV
+            </Button>
           </div>
           <Card>
             <CardHeader><CardTitle className="font-display">Collection — {format(new Date(reportMonth + "-01"), "MMMM yyyy")}</CardTitle></CardHeader>
@@ -182,10 +220,10 @@ function ReportsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {payments.filter((p) => p.payment_date >= monthStart && p.payment_date <= monthEnd).map((p) => {
+                  {monthPayments.map((p) => {
                     const student = students.find((s) => s.id === p.student_id);
                     return (
-                      <TableRow key={p.id}>
+                      <TableRow key={p.id} className="hover:bg-muted/50 transition-colors">
                         <TableCell>{format(new Date(p.payment_date), "dd MMM")}</TableCell>
                         <TableCell className="font-medium">{student?.name || "—"}</TableCell>
                         <TableCell>{p.payment_mode}</TableCell>
@@ -195,8 +233,9 @@ function ReportsPage() {
                   })}
                 </TableBody>
               </Table>
-              <div className="p-4 border-t text-right font-bold">
-                Total: ₹{payments.filter((p) => p.payment_date >= monthStart && p.payment_date <= monthEnd).reduce((sum, p) => sum + Number(p.amount), 0).toLocaleString("en-IN")}
+              <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/30 font-bold text-sm">
+                <span>Total ({monthPayments.length} payments)</span>
+                <span>₹{monthTotal.toLocaleString("en-IN")}</span>
               </div>
             </CardContent>
           </Card>
@@ -205,6 +244,13 @@ function ReportsPage() {
         <TabsContent value="salary" className="mt-4 space-y-4">
           <div className="flex items-center gap-3">
             <input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} className="border rounded-md px-3 py-2 text-sm bg-background" />
+            <Button variant="outline" size="sm" onClick={() => exportCSV(
+              ["Teacher", "Subject", "Per Lecture", "Lectures", "Salary"],
+              teacherSalaryData.map((t) => [t.name, t.subject, String(Number(t.per_lecture_fee)), String(t.count), String(t.salary)]),
+              `teacher_salary_${reportMonth}.csv`
+            )}>
+              <Download className="h-4 w-4 mr-1" />Export CSV
+            </Button>
           </div>
           <Card>
             <CardHeader><CardTitle className="font-display">Teacher Salary — {format(new Date(reportMonth + "-01"), "MMMM yyyy")}</CardTitle></CardHeader>
@@ -216,23 +262,20 @@ function ReportsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {teachers.map((t) => {
-                    const count = lectures.filter((l) => l.teacher_id === t.id).length;
-                    const salary = count * Number(t.per_lecture_fee);
-                    return (
-                      <TableRow key={t.id}>
-                        <TableCell className="font-medium">{t.name}</TableCell>
-                        <TableCell>{t.subject}</TableCell>
-                        <TableCell className="text-right">₹{Number(t.per_lecture_fee).toLocaleString("en-IN")}</TableCell>
-                        <TableCell className="text-right">{count}</TableCell>
-                        <TableCell className="text-right font-bold">₹{salary.toLocaleString("en-IN")}</TableCell>
-                      </TableRow>
-                    );
-                  })}
+                  {teacherSalaryData.map((t) => (
+                    <TableRow key={t.id} className="hover:bg-muted/50 transition-colors">
+                      <TableCell className="font-medium">{t.name}</TableCell>
+                      <TableCell>{t.subject}</TableCell>
+                      <TableCell className="text-right">₹{Number(t.per_lecture_fee).toLocaleString("en-IN")}</TableCell>
+                      <TableCell className="text-right">{t.count}</TableCell>
+                      <TableCell className="text-right font-bold">₹{t.salary.toLocaleString("en-IN")}</TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
-              <div className="p-4 border-t text-right font-bold">
-                Total: ₹{teachers.reduce((sum, t) => sum + lectures.filter((l) => l.teacher_id === t.id).length * Number(t.per_lecture_fee), 0).toLocaleString("en-IN")}
+              <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/30 font-bold text-sm">
+                <span>Total ({teacherSalaryData.length} teachers)</span>
+                <span>₹{totalSalary.toLocaleString("en-IN")}</span>
               </div>
             </CardContent>
           </Card>

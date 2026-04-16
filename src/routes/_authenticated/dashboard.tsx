@@ -7,12 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Link } from "@tanstack/react-router";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
+import { useAuth } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
 });
 
 function DashboardPage() {
+  const { user } = useAuth();
+
   const { data: students } = useQuery({
     queryKey: ["students"],
     queryFn: async () => {
@@ -44,7 +47,6 @@ function DashboardPage() {
   const pendingFees = totalFees - totalCollected;
   const todayPresent = todayAttendance?.length || 0;
 
-  // Pending fees per student (top 10)
   const studentPending = (students || []).map((s) => {
     const paid = (payments || []).filter((p) => p.student_id === s.id).reduce((sum, p) => sum + Number(p.amount), 0);
     const total = Number(s.total_fees) - Number(s.discount);
@@ -71,20 +73,23 @@ function DashboardPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Welcome greeting */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold font-display">Dashboard</h1>
+        <div>
+          <h1 className="text-2xl font-bold font-display">Welcome back 👋</h1>
+          <p className="text-sm text-muted-foreground">{format(new Date(), "EEEE, dd MMMM yyyy")} • {user?.email}</p>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Total Students" value={totalStudents} icon={Users} color="text-primary" />
-        <StatCard title="Fees Collected" value={`₹${totalCollected.toLocaleString("en-IN")}`} icon={IndianRupee} color="text-success" />
-        <StatCard title="Pending Fees" value={`₹${Math.max(0, pendingFees).toLocaleString("en-IN")}`} icon={AlertTriangle} color="text-destructive" />
-        <StatCard title="Present Today" value={todayPresent} icon={CalendarCheck} color="text-accent" />
+        <StatCard title="Total Students" value={totalStudents} icon={Users} gradient="from-primary/10 to-primary/5" iconBg="bg-primary/15" iconColor="text-primary" />
+        <StatCard title="Fees Collected" value={`₹${totalCollected.toLocaleString("en-IN")}`} icon={IndianRupee} gradient="from-success/10 to-success/5" iconBg="bg-success/15" iconColor="text-success" />
+        <StatCard title="Pending Fees" value={`₹${Math.max(0, pendingFees).toLocaleString("en-IN")}`} icon={AlertTriangle} gradient="from-destructive/10 to-destructive/5" iconBg="bg-destructive/15" iconColor="text-destructive" />
+        <StatCard title="Present Today" value={todayPresent} icon={CalendarCheck} gradient="from-accent/10 to-accent/5" iconBg="bg-accent/15" iconColor="text-accent" />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* Revenue Chart */}
-        <Card>
+        <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-display">Monthly Revenue</CardTitle>
           </CardHeader>
@@ -99,15 +104,14 @@ function DashboardPage() {
                     formatter={(value: number) => [`₹${value.toLocaleString("en-IN")}`, "Revenue"]}
                     contentStyle={{ borderRadius: "8px", border: "1px solid var(--border)", fontSize: "13px" }}
                   />
-                  <Bar dataKey="revenue" fill="var(--secondary)" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="revenue" fill="var(--primary)" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
 
-        {/* Top 10 Pending Fees */}
-        <Card>
+        <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base font-display">Top Pending Fees</CardTitle>
@@ -144,16 +148,16 @@ function DashboardPage() {
   );
 }
 
-function StatCard({ title, value, icon: Icon, color }: { title: string; value: string | number; icon: React.ElementType; color: string }) {
+function StatCard({ title, value, icon: Icon, gradient, iconBg, iconColor }: { title: string; value: string | number; icon: React.ElementType; gradient: string; iconBg: string; iconColor: string }) {
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <Card className={`bg-gradient-to-br ${gradient} hover:shadow-md transition-all duration-300 hover:-translate-y-0.5`}>
       <CardContent className="pt-5 pb-4 px-5">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs text-muted-foreground uppercase tracking-wider">{title}</p>
             <p className="text-2xl font-bold font-display mt-1">{value}</p>
           </div>
-          <div className={`h-11 w-11 rounded-xl bg-muted flex items-center justify-center ${color}`}>
+          <div className={`h-11 w-11 rounded-xl ${iconBg} flex items-center justify-center ${iconColor}`}>
             <Icon className="h-5 w-5" />
           </div>
         </div>

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { GraduationCap } from "lucide-react";
+import { GraduationCap, BookOpen, Award, Star } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -43,13 +43,32 @@ function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-primary px-4">
-      <Card className="w-full max-w-sm shadow-2xl border-0 bg-card animate-slide-up">
+    <div className="flex min-h-screen items-center justify-center bg-primary px-4 relative overflow-hidden">
+      {/* Background decoration */}
+      <div className="absolute inset-0 opacity-10">
+        <div className="absolute top-20 left-20 w-64 h-64 rounded-full bg-secondary blur-3xl" />
+        <div className="absolute bottom-20 right-20 w-80 h-80 rounded-full bg-accent blur-3xl" />
+      </div>
+      {/* Floating icons */}
+      <div className="absolute top-[15%] left-[10%] opacity-10 animate-bounce" style={{ animationDelay: "0.5s" }}>
+        <BookOpen className="h-12 w-12 text-secondary" />
+      </div>
+      <div className="absolute top-[30%] right-[12%] opacity-10 animate-bounce" style={{ animationDelay: "1s" }}>
+        <Award className="h-10 w-10 text-secondary" />
+      </div>
+      <div className="absolute bottom-[25%] left-[15%] opacity-10 animate-bounce" style={{ animationDelay: "1.5s" }}>
+        <Star className="h-8 w-8 text-secondary" />
+      </div>
+
+      <Card className="w-full max-w-sm shadow-2xl border-0 bg-card animate-slide-up relative z-10">
         <CardHeader className="text-center space-y-3">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-secondary">
-            <GraduationCap className="h-7 w-7" />
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-secondary shadow-lg">
+            <GraduationCap className="h-8 w-8" />
           </div>
-          <CardTitle className="text-2xl font-bold font-display">Yashshree Classes</CardTitle>
+          <div>
+            <CardTitle className="text-2xl font-bold font-display">Yashshree Classes</CardTitle>
+            <p className="text-xs text-secondary font-semibold mt-1">Coaching Classes • Since 2015</p>
+          </div>
           <CardDescription>Admin Panel — Sign in to continue</CardDescription>
         </CardHeader>
         <CardContent>
