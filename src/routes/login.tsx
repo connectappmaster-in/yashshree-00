@@ -20,7 +20,7 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   if (isAuthenticated) {
-    navigate({ to: "/" });
+    navigate({ to: "/dashboard" });
     return null;
   }
 
@@ -31,7 +31,7 @@ function LoginPage() {
     try {
       const result = await login(email, password);
       if (result.success) {
-        navigate({ to: "/" });
+        navigate({ to: "/dashboard" });
       } else {
         setError(result.error || "Invalid credentials");
       }
@@ -43,14 +43,14 @@ function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-sm shadow-xl border-0 bg-card">
+    <div className="flex min-h-screen items-center justify-center bg-primary px-4">
+      <Card className="w-full max-w-sm shadow-2xl border-0 bg-card animate-slide-up">
         <CardHeader className="text-center space-y-3">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-secondary">
             <GraduationCap className="h-7 w-7" />
           </div>
           <CardTitle className="text-2xl font-bold font-display">Yashshree Classes</CardTitle>
-          <CardDescription>Sign in to manage your institute</CardDescription>
+          <CardDescription>Admin Panel — Sign in to continue</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -81,7 +81,7 @@ function LoginPage() {
                 required
               />
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90 font-bold" disabled={loading}>
               {loading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
