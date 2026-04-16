@@ -35,6 +35,12 @@ export const Route = createRootRoute({
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Yashshree Coaching Classes — Best Coaching in Shivane, Pune" },
       { name: "description", content: "Yashshree Coaching Classes — Admission Open 2026-27. SSC/CBSE, Commerce & Science coaching in Shivane, Pune." },
+      { property: "og:title", content: "Yashshree Coaching Classes — Best Coaching in Shivane, Pune" },
+      { name: "twitter:title", content: "Yashshree Coaching Classes — Best Coaching in Shivane, Pune" },
+      { property: "og:description", content: "Yashshree Coaching Classes — Admission Open 2026-27. SSC/CBSE, Commerce & Science coaching in Shivane, Pune." },
+      { name: "twitter:description", content: "Yashshree Coaching Classes — Admission Open 2026-27. SSC/CBSE, Commerce & Science coaching in Shivane, Pune." },
+      { name: "twitter:card", content: "summary" },
+      { property: "og:type", content: "website" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
