@@ -22,7 +22,7 @@ export const Route = createFileRoute("/_authenticated/students-fees")({
 });
 
 const CLASSES = ["8th", "9th", "10th", "11th", "12th"];
-const MEDIUMS = ["Hindi", "English"];
+const MEDIUMS = ["Hindi", "English", "Marathi"];
 const SUBJECTS_BY_CLASS: Record<string, string[]> = {
   "8th": ["Maths", "Science", "English", "Hindi", "Social Science"],
   "9th": ["Maths", "Science", "English", "Hindi", "Social Science"],
@@ -101,11 +101,33 @@ function StudentFeesPage() {
     toast.success(`Reminder sent to ${student.name}`);
   };
 
+  const sendBulkReminders = () => {
+    const pendingStudents = filtered.filter((s) => s.remaining > 0);
+    if (pendingStudents.length === 0) {
+      toast.info("No students with pending fees");
+      return;
+    }
+    pendingStudents.forEach((s) => {
+      const msg = `Hello ${s.name}, your pending fees for Yashshree Classes is ₹${s.remaining.toLocaleString("en-IN")}. Please pay before ${s.fee_due_day}th of this month. Thank you.`;
+      supabase.from("whatsapp_logs").insert({ student_id: s.id, message: msg, type: "reminder" });
+    });
+    const firstStudent = pendingStudents[0];
+    const msg = `Hello ${firstStudent.name}, your pending fees for Yashshree Classes is ₹${firstStudent.remaining.toLocaleString("en-IN")}. Please pay before ${firstStudent.fee_due_day}th of this month. Thank you.`;
+    window.open(`https://wa.me/91${firstStudent.mobile}?text=${encodeURIComponent(msg)}`, "_blank");
+    toast.success(`Bulk reminders logged for ${pendingStudents.length} students`);
+  };
+
   return (
     <div className="animate-fade-in">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <h1 className="text-2xl font-bold font-display">Students & Fees</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold font-display">Students & Fees</h1>
+          <Badge variant="secondary" className="text-xs">{filtered.length} students</Badge>
+        </div>
         <div className="flex gap-2">
+          <Button variant="outline" className="border-success text-success hover:bg-success/10 font-semibold text-xs" onClick={sendBulkReminders}>
+            <Send className="h-3.5 w-3.5 mr-1" />Bulk Remind
+          </Button>
           <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setEditStudent(null); }}>
             <DialogTrigger asChild>
               <Button className="bg-secondary text-secondary-foreground hover:bg-secondary/90 font-semibold">
@@ -130,9 +152,8 @@ function StudentFeesPage() {
       </div>
 
       <div className="flex flex-col lg:flex-row gap-4">
-        {/* LEFT PANEL - Student List */}
+        {/* LEFT PANEL */}
         <div className="w-full lg:w-[40%] space-y-3">
-          {/* Filters */}
           <Card className="shadow-sm">
             <CardContent className="p-3 space-y-3">
               <div className="relative">
@@ -162,7 +183,6 @@ function StudentFeesPage() {
             </CardContent>
           </Card>
 
-          {/* Student List */}
           <Card className="shadow-sm">
             <CardContent className="p-0">
               <div className="overflow-x-auto max-h-[calc(100vh-280px)] overflow-y-auto">
@@ -203,7 +223,7 @@ function StudentFeesPage() {
           </Card>
         </div>
 
-        {/* RIGHT PANEL - Student Details */}
+        {/* RIGHT PANEL */}
         <div className="w-full lg:w-[60%]">
           {!selected ? (
             <Card className="shadow-sm h-full flex items-center justify-center min-h-[300px]">
@@ -211,7 +231,6 @@ function StudentFeesPage() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {/* Student Info */}
               <Card className="shadow-sm">
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between">
@@ -244,7 +263,6 @@ function StudentFeesPage() {
                 </CardContent>
               </Card>
 
-              {/* Fees Summary */}
               <div className="grid grid-cols-3 gap-3">
                 <Card className="shadow-sm">
                   <CardContent className="p-3 text-center">
@@ -268,7 +286,6 @@ function StudentFeesPage() {
                 </Card>
               </div>
 
-              {/* Action Buttons */}
               <div className="flex gap-2">
                 <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
                   <DialogTrigger asChild>
@@ -300,25 +317,34 @@ function StudentFeesPage() {
                 )}
               </div>
 
-              {/* Payment History */}
+              {/* Payment History - Timeline style */}
               <Card className="shadow-sm">
                 <CardHeader className="pb-2 px-4 pt-4">
                   <CardTitle className="text-sm font-display">Payment History</CardTitle>
                 </CardHeader>
-                <CardContent className="p-0">
-                  <div className="max-h-52 overflow-y-auto divide-y">
+                <CardContent className="px-4 pb-4">
+                  <div className="max-h-52 overflow-y-auto">
                     {selected.studentPayments.length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-6">No payments yet</p>
                     ) : (
-                      selected.studentPayments.map((p) => (
-                        <div key={p.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-muted/30 transition-colors">
-                          <div>
-                            <p className="text-sm font-medium">₹{Number(p.amount).toLocaleString("en-IN")}</p>
-                            <p className="text-xs text-muted-foreground">{format(new Date(p.payment_date), "dd MMM yyyy")} • {p.payment_mode}</p>
+                      <div className="relative pl-6 space-y-4">
+                        {/* Timeline line */}
+                        <div className="absolute left-2 top-1 bottom-1 w-0.5 bg-border" />
+                        {selected.studentPayments.map((p) => (
+                          <div key={p.id} className="relative group">
+                            {/* Timeline dot */}
+                            <div className="absolute -left-[18px] top-1 h-3 w-3 rounded-full bg-success border-2 border-background" />
+                            <div className="bg-muted/30 rounded-lg p-3 hover:bg-muted/50 transition-colors">
+                              <div className="flex items-center justify-between">
+                                <p className="text-sm font-bold">₹{Number(p.amount).toLocaleString("en-IN")}</p>
+                                <Badge variant="outline" className="text-xs">{p.payment_mode}</Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-1">{format(new Date(p.payment_date), "dd MMM yyyy")}</p>
+                              {p.notes && <p className="text-xs text-muted-foreground mt-1 italic">{p.notes}</p>}
+                            </div>
                           </div>
-                          {p.notes && <p className="text-xs text-muted-foreground max-w-[120px] truncate">{p.notes}</p>}
-                        </div>
-                      ))
+                        ))}
+                      </div>
                     )}
                   </div>
                 </CardContent>

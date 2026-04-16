@@ -65,15 +65,18 @@ function TeachersPage() {
     return { ...t, lectureCount: teacherLectures.length, salary };
   });
 
+  const totalSalary = teacherStats.reduce((sum, t) => sum + t.salary, 0);
+  const totalLectures = teacherStats.reduce((sum, t) => sum + t.lectureCount, 0);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold font-display">Teachers</h1>
         <div className="flex gap-2">
           <Input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="w-[160px]" />
           <Dialog open={teacherDialogOpen} onOpenChange={(open) => { setTeacherDialogOpen(open); if (!open) setEditTeacher(null); }}>
             <DialogTrigger asChild>
-              <Button><Plus className="h-4 w-4 mr-1" />Add Teacher</Button>
+              <Button className="bg-secondary text-secondary-foreground hover:bg-secondary/90 font-semibold"><Plus className="h-4 w-4 mr-1" />Add Teacher</Button>
             </DialogTrigger>
             <DialogContent className="max-w-sm">
               <DialogHeader>
@@ -112,7 +115,7 @@ function TeachersPage() {
             </TableHeader>
             <TableBody>
               {teacherStats.map((t) => (
-                <TableRow key={t.id}>
+                <TableRow key={t.id} className="hover:bg-muted/50 transition-colors">
                   <TableCell className="font-medium">{t.name}</TableCell>
                   <TableCell>{t.subject}</TableCell>
                   <TableCell className="text-right">₹{Number(t.per_lecture_fee).toLocaleString("en-IN")}</TableCell>
@@ -120,15 +123,15 @@ function TeachersPage() {
                   <TableCell className="text-right font-bold">₹{t.salary.toLocaleString("en-IN")}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => { setLectureTeacherId(t.id); setLectureDialogOpen(true); }} title="Log Lecture">
-                        <BookOpen className="h-4 w-4" />
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setLectureTeacherId(t.id); setLectureDialogOpen(true); }} title="Log Lecture">
+                        <BookOpen className="h-4 w-4 text-secondary-foreground" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => { setEditTeacher(t); setTeacherDialogOpen(true); }}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditTeacher(t); setTeacherDialogOpen(true); }}>
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8"><Trash2 className="h-4 w-4 text-destructive" /></Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
@@ -147,10 +150,17 @@ function TeachersPage() {
               ))}
             </TableBody>
           </Table>
+          {/* Total summary */}
+          <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/30 font-bold text-sm">
+            <span>Total ({teacherStats.length} teachers)</span>
+            <div className="flex gap-8">
+              <span>{totalLectures} lectures</span>
+              <span>₹{totalSalary.toLocaleString("en-IN")}</span>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Log Lecture Dialog */}
       <Dialog open={lectureDialogOpen} onOpenChange={setLectureDialogOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -200,7 +210,7 @@ function TeacherForm({ teacher, onSuccess }: { teacher: Tables<"teachers"> | nul
       <div className="space-y-1.5"><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} required /></div>
       <div className="space-y-1.5"><Label>Subject</Label><Input value={subject} onChange={(e) => setSubject(e.target.value)} required /></div>
       <div className="space-y-1.5"><Label>Per Lecture Fee (₹)</Label><Input type="number" value={fee} onChange={(e) => setFee(e.target.value)} required /></div>
-      <Button type="submit" className="w-full" disabled={mutation.isPending}>{mutation.isPending ? "Saving..." : teacher ? "Update" : "Add Teacher"}</Button>
+      <Button type="submit" className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90" disabled={mutation.isPending}>{mutation.isPending ? "Saving..." : teacher ? "Update" : "Add Teacher"}</Button>
     </form>
   );
 }
@@ -239,7 +249,7 @@ function LectureForm({ teacherId, teachers, onSuccess }: { teacherId: string; te
           <SelectContent>{BATCHES.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
         </Select>
       </div>
-      <Button type="submit" className="w-full" disabled={mutation.isPending}>{mutation.isPending ? "Saving..." : "Log Lecture"}</Button>
+      <Button type="submit" className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90" disabled={mutation.isPending}>{mutation.isPending ? "Saving..." : "Log Lecture"}</Button>
     </form>
   );
 }

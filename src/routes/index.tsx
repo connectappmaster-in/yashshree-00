@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { GraduationCap, Users, Star, Award, BookOpen, Phone, MessageCircle, MapPin, ChevronRight, Shield, Target } from "lucide-react";
+import { GraduationCap, Users, Star, Award, BookOpen, Phone, MessageCircle, MapPin, ChevronRight, Shield, Target, TrendingUp, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -13,6 +14,26 @@ export const Route = createFileRoute("/")({
   }),
   component: LandingPage,
 });
+
+function AnimatedCounter({ target, suffix = "" }: { target: number; suffix?: string }) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    let start = 0;
+    const duration = 2000;
+    const step = Math.ceil(target / (duration / 16));
+    const timer = setInterval(() => {
+      start += step;
+      if (start >= target) {
+        setCount(target);
+        clearInterval(timer);
+      } else {
+        setCount(start);
+      }
+    }, 16);
+    return () => clearInterval(timer);
+  }, [target]);
+  return <span>{count}{suffix}</span>;
+}
 
 function LandingPage() {
   return (
@@ -46,8 +67,8 @@ function LandingPage() {
         </div>
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-16 md:py-24 relative z-10">
           <div className="grid md:grid-cols-2 gap-12 items-center">
-            <div className="space-y-6">
-              <span className="inline-block bg-secondary text-secondary-foreground px-4 py-1.5 rounded-full text-sm font-bold animate-slide-up">
+            <div className="space-y-6 animate-slide-up">
+              <span className="inline-block bg-secondary text-secondary-foreground px-4 py-1.5 rounded-full text-sm font-bold">
                 🎓 Admission Open 2026-27
               </span>
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-display font-bold leading-tight">
@@ -76,17 +97,61 @@ function LandingPage() {
                   </Button>
                 </a>
                 <a href="#courses">
-                  <Button size="lg" variant="outline" className="border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10 font-bold text-base">
+                  <Button size="lg" className="bg-primary-foreground/20 text-primary-foreground hover:bg-primary-foreground/30 border-2 border-primary-foreground/40 font-bold text-base">
                     View Courses
                   </Button>
                 </a>
               </div>
             </div>
+            {/* Hero Illustration */}
             <div className="hidden md:flex justify-center">
-              <div className="w-80 h-80 rounded-3xl bg-primary-foreground/5 border border-primary-foreground/10 flex items-center justify-center">
-                <GraduationCap className="h-32 w-32 text-secondary/60" />
+              <div className="relative w-80 h-80">
+                {/* Background circles */}
+                <div className="absolute inset-0 rounded-full bg-secondary/10 animate-pulse" />
+                <div className="absolute inset-6 rounded-full bg-secondary/15" />
+                <div className="absolute inset-12 rounded-full bg-primary-foreground/5 border-2 border-secondary/30 flex items-center justify-center">
+                  <div className="text-center space-y-3">
+                    <GraduationCap className="h-20 w-20 text-secondary mx-auto" />
+                    <div className="space-y-1">
+                      <p className="text-2xl font-display font-bold text-secondary">Since 2015</p>
+                      <p className="text-xs text-primary-foreground/60 font-medium">Shaping Futures</p>
+                    </div>
+                  </div>
+                </div>
+                {/* Floating icons */}
+                <div className="absolute top-4 right-4 h-12 w-12 rounded-xl bg-secondary/20 flex items-center justify-center animate-bounce" style={{ animationDelay: "0.5s" }}>
+                  <BookOpen className="h-6 w-6 text-secondary" />
+                </div>
+                <div className="absolute bottom-8 left-2 h-10 w-10 rounded-lg bg-accent/30 flex items-center justify-center animate-bounce" style={{ animationDelay: "1s" }}>
+                  <Star className="h-5 w-5 text-accent-foreground" />
+                </div>
+                <div className="absolute top-16 left-0 h-10 w-10 rounded-lg bg-success/20 flex items-center justify-center animate-bounce" style={{ animationDelay: "1.5s" }}>
+                  <Award className="h-5 w-5 text-success" />
+                </div>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Stats Counter */}
+      <section className="bg-secondary py-8">
+        <div className="max-w-7xl mx-auto px-4 md:px-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+            {[
+              { value: 500, suffix: "+", label: "Students Taught", icon: Users },
+              { value: 10, suffix: "+", label: "Years Experience", icon: Clock },
+              { value: 95, suffix: "%", label: "Board Results", icon: TrendingUp },
+              { value: 15, suffix: "+", label: "Expert Teachers", icon: GraduationCap },
+            ].map((stat) => (
+              <div key={stat.label} className="space-y-1">
+                <stat.icon className="h-6 w-6 mx-auto text-primary mb-1" />
+                <p className="text-3xl md:text-4xl font-display font-bold text-secondary-foreground">
+                  <AnimatedCounter target={stat.value} suffix={stat.suffix} />
+                </p>
+                <p className="text-xs md:text-sm font-medium text-secondary-foreground/70">{stat.label}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -104,14 +169,14 @@ function LandingPage() {
               classes="8th, 9th, 10th"
               icon={BookOpen}
               subjects={["Maths", "Science", "English", "Social Science"]}
-              color="bg-primary"
+              color="bg-gradient-to-br from-primary to-primary/80"
             />
             <CourseCard
               title="Commerce"
               classes="11th, 12th"
               icon={Target}
               subjects={["Accountancy", "Economics", "Business Studies", "English"]}
-              color="bg-accent"
+              color="bg-gradient-to-br from-accent to-accent/80"
               badge="Morning & Evening Batches"
             />
             <CourseCard
@@ -119,7 +184,7 @@ function LandingPage() {
               classes="11th, 12th"
               icon={Award}
               subjects={["Physics", "Chemistry", "Maths", "Biology"]}
-              color="bg-primary"
+              color="bg-gradient-to-br from-primary to-primary/80"
             />
           </div>
         </div>
@@ -142,7 +207,7 @@ function LandingPage() {
             ].map((feature) => (
               <div
                 key={feature.title}
-                className="bg-card rounded-xl p-6 shadow-sm border hover:shadow-md transition-shadow group"
+                className="bg-card rounded-xl p-6 shadow-sm border hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group"
               >
                 <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-secondary/20 transition-colors">
                   <feature.icon className="h-6 w-6 text-primary" />
@@ -204,16 +269,34 @@ function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-foreground text-background py-8">
-        <div className="max-w-7xl mx-auto px-4 md:px-8 text-center space-y-3">
-          <div className="flex items-center justify-center gap-2">
-            <GraduationCap className="h-5 w-5 text-secondary" />
-            <span className="font-display font-bold">Yashshree Coaching Classes</span>
+      <footer className="bg-foreground text-background py-10">
+        <div className="max-w-7xl mx-auto px-4 md:px-8">
+          <div className="grid md:grid-cols-3 gap-8 mb-8">
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <GraduationCap className="h-6 w-6 text-secondary" />
+                <span className="font-display font-bold text-lg">Yashshree Classes</span>
+              </div>
+              <p className="text-sm text-background/60">Shaping futures since 2015. Best coaching classes in Shivane, Pune.</p>
+            </div>
+            <div>
+              <h4 className="font-display font-bold mb-3">Quick Links</h4>
+              <div className="space-y-2 text-sm text-background/60">
+                <a href="#home" className="block hover:text-secondary transition-colors">Home</a>
+                <a href="#courses" className="block hover:text-secondary transition-colors">Courses</a>
+                <a href="#features" className="block hover:text-secondary transition-colors">Features</a>
+                <a href="#contact" className="block hover:text-secondary transition-colors">Contact</a>
+              </div>
+            </div>
+            <div>
+              <h4 className="font-display font-bold mb-3">Contact</h4>
+              <p className="text-sm text-background/60">Kamte Plaza, Jayhind Chowk, Shivane, Pune - 23</p>
+              <p className="text-sm text-background/60 mt-2">📞 9405402865 / 9850740805</p>
+            </div>
           </div>
-          <p className="text-sm text-background/60">
-            Kamte Plaza, Jayhind Chowk, Shivane, Pune - 23 &nbsp;|&nbsp; 9405402865 / 9850740805
-          </p>
-          <p className="text-xs text-background/40">© 2026 Yashshree Classes. All rights reserved.</p>
+          <div className="border-t border-background/10 pt-6 text-center">
+            <p className="text-xs text-background/40">© 2026 Yashshree Coaching Classes. All rights reserved.</p>
+          </div>
         </div>
       </footer>
     </div>
@@ -236,7 +319,7 @@ function CourseCard({
   badge?: string;
 }) {
   return (
-    <div className="bg-card rounded-xl shadow-sm border overflow-hidden hover:shadow-lg transition-shadow group">
+    <div className="bg-card rounded-xl shadow-sm border overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group">
       <div className={`${color} text-primary-foreground p-6`}>
         <Icon className="h-8 w-8 mb-3 text-secondary" />
         <h3 className="font-display font-bold text-xl">{title}</h3>
