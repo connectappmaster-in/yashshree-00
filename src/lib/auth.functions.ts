@@ -1,34 +1,36 @@
 import { createServerFn } from "@tanstack/react-start";
-import { useSession, updateSession, clearSession } from "@tanstack/react-start/server";
-
-const sessionConfig = {
-  password: process.env.SESSION_SECRET || "yashshree-fallback-secret-key-minimum-32-chars",
-  name: "yashshree-session",
-  maxAge: 60 * 60 * 24 * 7,
-};
+import { getCookie, setCookie, deleteCookie } from "@tanstack/react-start/server";
 
 const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "yashshree2024";
+const SESSION_COOKIE = "yashshree-auth";
+const SESSION_TOKEN = "authenticated-admin-session";
 
 export const loginFn = createServerFn({ method: "POST" })
   .inputValidator((data: { username: string; password: string }) => data)
   .handler(async ({ data }) => {
     if (data.username === ADMIN_USERNAME && data.password === ADMIN_PASSWORD) {
-      await updateSession(sessionConfig, { isAuthenticated: true, username: ADMIN_USERNAME });
-      return { success: true };
+      setCookie(SESSION_COOKIE, SESSION_TOKEN, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 7,
+        path: "/",
+      });
+      return { success: true as const };
     }
-    return { success: false, error: "Invalid credentials" };
+    return { success: false as const, error: "Invalid credentials" };
   });
 
 export const logoutFn = createServerFn({ method: "POST" }).handler(async () => {
-  await clearSession(sessionConfig);
+  deleteCookie(SESSION_COOKIE);
   return { success: true };
 });
 
 export const getAuthFn = createServerFn({ method: "GET" }).handler(async () => {
-  const session = await useSession<{ isAuthenticated?: boolean; username?: string }>(sessionConfig);
+  const token = getCookie(SESSION_COOKIE);
   return {
-    isAuthenticated: session.data.isAuthenticated === true,
-    username: session.data.username || null,
+    isAuthenticated: token === SESSION_TOKEN,
+    username: token === SESSION_TOKEN ? ADMIN_USERNAME : null,
   };
 });
