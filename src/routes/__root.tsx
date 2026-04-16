@@ -33,8 +33,8 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Yashshree Classes — Coaching Institute Management" },
-      { name: "description", content: "Manage admissions, fees, attendance, and more for Yashshree Classes coaching institute." },
+      { title: "Yashshree Coaching Classes — Best Coaching in Shivane, Pune" },
+      { name: "description", content: "Yashshree Coaching Classes — Admission Open 2026-27. SSC/CBSE, Commerce & Science coaching in Shivane, Pune." },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
