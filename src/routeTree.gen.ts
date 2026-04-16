@@ -14,9 +14,7 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedWhatsappLogsRouteImport } from './routes/_authenticated/whatsapp-logs'
 import { Route as AuthenticatedTeachersRouteImport } from './routes/_authenticated/teachers'
-import { Route as AuthenticatedStudentsRouteImport } from './routes/_authenticated/students'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
-import { Route as AuthenticatedFeesRouteImport } from './routes/_authenticated/fees'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedAttendanceRouteImport } from './routes/_authenticated/attendance'
 
@@ -45,19 +43,9 @@ const AuthenticatedTeachersRoute = AuthenticatedTeachersRouteImport.update({
   path: '/teachers',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedStudentsRoute = AuthenticatedStudentsRouteImport.update({
-  id: '/students',
-  path: '/students',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
 const AuthenticatedReportsRoute = AuthenticatedReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedFeesRoute = AuthenticatedFeesRouteImport.update({
-  id: '/fees',
-  path: '/fees',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
@@ -76,9 +64,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/attendance': typeof AuthenticatedAttendanceRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
-  '/fees': typeof AuthenticatedFeesRoute
   '/reports': typeof AuthenticatedReportsRoute
-  '/students': typeof AuthenticatedStudentsRoute
   '/teachers': typeof AuthenticatedTeachersRoute
   '/whatsapp-logs': typeof AuthenticatedWhatsappLogsRoute
 }
@@ -87,9 +73,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/attendance': typeof AuthenticatedAttendanceRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
-  '/fees': typeof AuthenticatedFeesRoute
   '/reports': typeof AuthenticatedReportsRoute
-  '/students': typeof AuthenticatedStudentsRoute
   '/teachers': typeof AuthenticatedTeachersRoute
   '/whatsapp-logs': typeof AuthenticatedWhatsappLogsRoute
 }
@@ -100,9 +84,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_authenticated/attendance': typeof AuthenticatedAttendanceRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
-  '/_authenticated/fees': typeof AuthenticatedFeesRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
-  '/_authenticated/students': typeof AuthenticatedStudentsRoute
   '/_authenticated/teachers': typeof AuthenticatedTeachersRoute
   '/_authenticated/whatsapp-logs': typeof AuthenticatedWhatsappLogsRoute
 }
@@ -113,9 +95,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/attendance'
     | '/dashboard'
-    | '/fees'
     | '/reports'
-    | '/students'
     | '/teachers'
     | '/whatsapp-logs'
   fileRoutesByTo: FileRoutesByTo
@@ -124,9 +104,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/attendance'
     | '/dashboard'
-    | '/fees'
     | '/reports'
-    | '/students'
     | '/teachers'
     | '/whatsapp-logs'
   id:
@@ -136,9 +114,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/_authenticated/attendance'
     | '/_authenticated/dashboard'
-    | '/_authenticated/fees'
     | '/_authenticated/reports'
-    | '/_authenticated/students'
     | '/_authenticated/teachers'
     | '/_authenticated/whatsapp-logs'
   fileRoutesById: FileRoutesById
@@ -186,25 +162,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTeachersRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/students': {
-      id: '/_authenticated/students'
-      path: '/students'
-      fullPath: '/students'
-      preLoaderRoute: typeof AuthenticatedStudentsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
     '/_authenticated/reports': {
       id: '/_authenticated/reports'
       path: '/reports'
       fullPath: '/reports'
       preLoaderRoute: typeof AuthenticatedReportsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/fees': {
-      id: '/_authenticated/fees'
-      path: '/fees'
-      fullPath: '/fees'
-      preLoaderRoute: typeof AuthenticatedFeesRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/dashboard': {
@@ -227,9 +189,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteChildren {
   AuthenticatedAttendanceRoute: typeof AuthenticatedAttendanceRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
-  AuthenticatedFeesRoute: typeof AuthenticatedFeesRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
-  AuthenticatedStudentsRoute: typeof AuthenticatedStudentsRoute
   AuthenticatedTeachersRoute: typeof AuthenticatedTeachersRoute
   AuthenticatedWhatsappLogsRoute: typeof AuthenticatedWhatsappLogsRoute
 }
@@ -237,9 +197,7 @@ interface AuthenticatedRouteChildren {
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAttendanceRoute: AuthenticatedAttendanceRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
-  AuthenticatedFeesRoute: AuthenticatedFeesRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
-  AuthenticatedStudentsRoute: AuthenticatedStudentsRoute,
   AuthenticatedTeachersRoute: AuthenticatedTeachersRoute,
   AuthenticatedWhatsappLogsRoute: AuthenticatedWhatsappLogsRoute,
 }
