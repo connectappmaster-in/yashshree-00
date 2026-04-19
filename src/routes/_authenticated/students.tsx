@@ -446,10 +446,14 @@ function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"stu
 
   const mutation = useMutation({
     mutationFn: async () => {
+      const mobile = form.mobile.trim();
+      if (!/^\d{10}$/.test(mobile)) {
+        throw new Error("Mobile number must be exactly 10 digits");
+      }
       const ay = form.academic_year || deriveAcademicYear(form.admission_date);
       const payload: TablesInsert<"students"> = {
         name: form.name.trim(),
-        mobile: form.mobile.trim(),
+        mobile,
         class: form.class,
         medium: form.medium,
         subjects: form.subjects,
@@ -484,7 +488,7 @@ function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"stu
     <form onSubmit={(e) => { e.preventDefault(); mutation.mutate(); }} className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2 space-y-1.5"><Label>Name</Label><Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required /></div>
-        <div className="space-y-1.5"><Label>Mobile</Label><Input value={form.mobile} onChange={(e) => setForm((f) => ({ ...f, mobile: e.target.value }))} required maxLength={10} /></div>
+        <div className="space-y-1.5"><Label>Mobile (10 digits)</Label><Input value={form.mobile} onChange={(e) => setForm((f) => ({ ...f, mobile: e.target.value.replace(/\D/g, "") }))} required maxLength={10} pattern="\d{10}" inputMode="numeric" /></div>
         <div className="space-y-1.5"><Label>Admission Date</Label><Input type="date" value={form.admission_date} onChange={(e) => setForm((f) => ({ ...f, admission_date: e.target.value, academic_year: deriveAcademicYear(e.target.value) }))} /></div>
         <div className="space-y-1.5">
           <Label>Class</Label>
