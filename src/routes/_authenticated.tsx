@@ -2,6 +2,8 @@ import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
 import { AdminTopNav } from "@/components/AdminTopNav";
 import { useEffect } from "react";
+import { AcademicYearProvider } from "@/lib/academic-year-context";
+import { ThemeProvider } from "@/lib/theme-context";
 
 export const Route = createFileRoute("/_authenticated")({
   component: AuthenticatedLayout,
@@ -28,11 +30,15 @@ function AuthenticatedLayout() {
   if (!isAuthenticated) return null;
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <AdminTopNav />
-      <main className="flex-1 overflow-auto p-4 md:p-6 animate-fade-in">
-        <Outlet />
-      </main>
-    </div>
+    <ThemeProvider>
+      <AcademicYearProvider>
+        <div className="min-h-screen flex flex-col">
+          <AdminTopNav />
+          <main className="flex-1 overflow-auto p-4 md:p-6 animate-fade-in">
+            <Outlet />
+          </main>
+        </div>
+      </AcademicYearProvider>
+    </ThemeProvider>
   );
 }
