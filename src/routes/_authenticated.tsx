@@ -5,8 +5,9 @@ import { ThemeProvider } from "@/lib/theme-context";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated")({
-  // Auth lives in localStorage (client-only). Skip the check during SSR so the
-  // server-rendered HTML matches what the client renders after hydration.
+  // Auth + theme + academic year all live in localStorage (client-only).
+  // Disable SSR so the server doesn't render a different tree than the client.
+  ssr: false,
   beforeLoad: async () => {
     if (typeof window === "undefined") return;
     const { data: { session } } = await supabase.auth.getSession();
