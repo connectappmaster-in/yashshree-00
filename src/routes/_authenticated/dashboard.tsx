@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, IndianRupee, AlertTriangle, CalendarCheck, MessageCircle } from "lucide-react";
+import { Users, IndianRupee, AlertTriangle, CalendarCheck, MessageCircle, Eye, EyeOff } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "@tanstack/react-router";
@@ -18,7 +19,7 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 function DashboardPage() {
   const { user } = useAuth();
   const { year } = useAcademicYear();
-
+  const [showCollected, setShowCollected] = useState(false);
   const { data: students } = useQuery({
     queryKey: ["students", year],
     queryFn: async () => {
@@ -87,7 +88,11 @@ function DashboardPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard title="Total Students" value={totalStudents} icon={Users} gradient="from-primary/10 to-primary/5" iconBg="bg-primary/15" iconColor="text-primary" />
-        <StatCard title="Fees Collected" value={`₹${totalCollected.toLocaleString("en-IN")}`} icon={IndianRupee} gradient="from-success/10 to-success/5" iconBg="bg-success/15" iconColor="text-success" />
+        <StatCard title="Fees Collected" value={showCollected ? `₹${totalCollected.toLocaleString("en-IN")}` : "₹ • • • • •"} icon={IndianRupee} gradient="from-success/10 to-success/5" iconBg="bg-success/15" iconColor="text-success" action={
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowCollected((v) => !v)} title={showCollected ? "Hide amount" : "Show amount"}>
+            {showCollected ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+          </Button>
+        } />
         <StatCard title="Pending Fees" value={`₹${Math.max(0, pendingFees).toLocaleString("en-IN")}`} icon={AlertTriangle} gradient="from-destructive/10 to-destructive/5" iconBg="bg-destructive/15" iconColor="text-destructive" />
         <StatCard title="Present Today" value={todayPresent} icon={CalendarCheck} gradient="from-accent/10 to-accent/5" iconBg="bg-accent/15" iconColor="text-accent" />
       </div>
@@ -152,16 +157,19 @@ function DashboardPage() {
   );
 }
 
-function StatCard({ title, value, icon: Icon, gradient, iconBg, iconColor }: { title: string; value: string | number; icon: React.ElementType; gradient: string; iconBg: string; iconColor: string }) {
+function StatCard({ title, value, icon: Icon, gradient, iconBg, iconColor, action }: { title: string; value: string | number; icon: React.ElementType; gradient: string; iconBg: string; iconColor: string; action?: React.ReactNode }) {
   return (
     <Card className={`bg-gradient-to-br ${gradient} hover:shadow-md transition-all duration-300 hover:-translate-y-0.5`}>
       <CardContent className="pt-5 pb-4 px-5">
         <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wider">{title}</p>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">{title}</p>
+              {action}
+            </div>
             <p className="text-2xl font-bold font-display mt-1">{value}</p>
           </div>
-          <div className={`h-11 w-11 rounded-xl ${iconBg} flex items-center justify-center ${iconColor}`}>
+          <div className={`h-11 w-11 rounded-xl ${iconBg} flex items-center justify-center ${iconColor} shrink-0`}>
             <Icon className="h-5 w-5" />
           </div>
         </div>
