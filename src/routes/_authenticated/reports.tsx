@@ -16,6 +16,7 @@ import { Download, FileSpreadsheet, FileText, Send, MessageCircle } from "lucide
 import { format, startOfMonth, endOfMonth, subDays, subMonths, subYears } from "date-fns";
 import { useAcademicYear } from "@/lib/academic-year-context";
 import { exportCSV, exportExcel, exportPDF } from "@/lib/export-utils";
+import { safeNum, buildWhatsappUrl } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/reports")({
   component: ReportsPage,
@@ -61,29 +62,41 @@ function ReportsPage() {
     queryFn: async () => (await supabase.from("attendance").select("*").eq("academic_year", year)).data || [],
   });
 
+  const { data: teacherAtt = [] } = useQuery({
+    queryKey: ["teacher-attendance", reportMonth, year],
+    queryFn: async () => (await supabase.from("teacher_attendance").select("*").eq("academic_year", year).gte("date", monthStart).lte("date", monthEnd)).data || [],
+  });
+
   const filteredStudents = students.filter((s) => {
     const mc = filterClass === "all" || s.class === filterClass;
     const mm = filterMedium === "all" || s.medium === filterMedium;
     return mc && mm;
   });
 
-  // Pending fees
+  // Pending fees — uses ALL payments to avoid AY-mismatch inflation
+  const { data: allPayments = [] } = useQuery({
+    queryKey: ["payments-all"],
+    queryFn: async () => (await supabase.from("payments").select("*")).data || [],
+  });
   const pendingData = students.filter((s) => s.status === "active").map((s) => {
-    const paid = payments.filter((p) => p.student_id === s.id).reduce((sum, p) => sum + Number(p.amount), 0);
-    const total = Number(s.total_fees) - Number(s.discount);
+    const paid = allPayments.filter((p) => p.student_id === s.id).reduce((sum, p) => sum + safeNum(p.amount), 0);
+    const total = safeNum(s.total_fees) - safeNum(s.discount);
     return { ...s, paid, total, remaining: total - paid };
   }).filter((s) => s.remaining > 0).sort((a, b) => b.remaining - a.remaining);
   const totalPendingAmount = pendingData.reduce((sum, s) => sum + s.remaining, 0);
 
-  // Monthly collection
+  // Monthly collection (this month payments only)
   const monthPayments = payments.filter((p) => p.payment_date >= monthStart && p.payment_date <= monthEnd);
-  const monthTotal = monthPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+  const monthTotal = monthPayments.reduce((sum, p) => sum + safeNum(p.amount), 0);
 
-  // Salary
+  // Salary — fixed teachers only count for the month if they were marked present at least once
   const teacherSalaryData = teachers.map((t) => {
     const count = lectures.filter((l) => l.teacher_id === t.id).length;
-    const salary = t.payment_type === "fixed" ? Number(t.fixed_salary) : count * Number(t.per_lecture_fee);
-    return { ...t, count, salary };
+    const presentDays = teacherAtt.filter((a) => a.teacher_id === t.id && a.status === "present").length;
+    const salary = t.payment_type === "fixed"
+      ? (presentDays > 0 ? safeNum(t.fixed_salary) : 0)
+      : count * safeNum(t.per_lecture_fee);
+    return { ...t, count, presentDays, salary };
   });
   const totalSalary = teacherSalaryData.reduce((sum, t) => sum + t.salary, 0);
 
