@@ -205,10 +205,13 @@ function FeesPage() {
           {paymentStudentId && (
             <PaymentForm
               studentId={paymentStudentId}
+              studentName={studentFees.find((s) => s.id === paymentStudentId)?.name || ""}
+              remaining={studentFees.find((s) => s.id === paymentStudentId)?.remaining || 0}
               defaultYear={year}
               onSuccess={() => {
                 setPaymentDialogOpen(false);
                 queryClient.invalidateQueries({ queryKey: ["payments"] });
+                queryClient.invalidateQueries({ queryKey: ["payments-all"] });
               }}
             />
           )}
@@ -218,7 +221,7 @@ function FeesPage() {
   );
 }
 
-function PaymentForm({ studentId, defaultYear, onSuccess }: { studentId: string; defaultYear: string; onSuccess: () => void }) {
+function PaymentForm({ studentId, studentName, remaining, defaultYear, onSuccess }: { studentId: string; studentName: string; remaining: number; defaultYear: string; onSuccess: () => void }) {
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [mode, setMode] = useState("cash");
@@ -226,24 +229,59 @@ function PaymentForm({ studentId, defaultYear, onSuccess }: { studentId: string;
 
   const mutation = useMutation({
     mutationFn: async () => {
+      const amt = safeNum(amount);
+      if (amt <= 0) throw new Error("Amount must be greater than 0");
+      if (remaining > 0 && amt > remaining) {
+        const ok = window.confirm(`Amount ₹${amt.toLocaleString("en-IN")} exceeds remaining ₹${remaining.toLocaleString("en-IN")}. Record anyway?`);
+        if (!ok) throw new Error("Cancelled");
+      }
       const ay = deriveAcademicYear(date) || defaultYear;
       const { error } = await supabase.from("payments").insert({
         student_id: studentId,
-        amount: Number(amount),
+        amount: amt,
         payment_date: date,
         payment_mode: mode,
         notes: notes || null,
         academic_year: ay,
       });
       if (error) throw error;
+      return { amt, date, mode, notes };
     },
     onSuccess: () => { toast.success("Payment recorded"); onSuccess(); },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => { if (e.message !== "Cancelled") toast.error(e.message); },
   });
+
+  const printReceipt = () => {
+    const win = window.open("", "_blank", "width=400,height=600");
+    if (!win) return;
+    const amt = safeNum(amount);
+    win.document.write(`
+      <html><head><title>Receipt - ${studentName}</title>
+      <style>body{font-family:system-ui;padding:24px;max-width:340px;margin:auto;color:#222}h1{margin:0 0 4px;font-size:18px}h2{font-size:14px;margin:0 0 16px;color:#666;font-weight:normal}table{width:100%;border-collapse:collapse;font-size:13px}td{padding:6px 0;border-bottom:1px dashed #ccc}.lbl{color:#666}.amt{font-size:22px;font-weight:bold;text-align:center;padding:16px;border:2px dashed #888;border-radius:8px;margin:12px 0}.foot{text-align:center;font-size:11px;color:#888;margin-top:24px}</style>
+      </head><body>
+      <h1>Yashshree Coaching Classes</h1>
+      <h2>Payment Receipt</h2>
+      <div class="amt">Rs. ${amt.toLocaleString("en-IN")}</div>
+      <table>
+        <tr><td class="lbl">Student</td><td style="text-align:right;font-weight:600">${studentName}</td></tr>
+        <tr><td class="lbl">Date</td><td style="text-align:right">${date}</td></tr>
+        <tr><td class="lbl">Mode</td><td style="text-align:right;text-transform:capitalize">${mode}</td></tr>
+        ${notes ? `<tr><td class="lbl">Notes</td><td style="text-align:right">${notes}</td></tr>` : ""}
+        <tr><td class="lbl">Receipt #</td><td style="text-align:right">${Date.now().toString().slice(-8)}</td></tr>
+      </table>
+      <p class="foot">Thank you. This is a computer-generated receipt.</p>
+      <script>window.onload=()=>setTimeout(()=>window.print(),200)</script>
+      </body></html>
+    `);
+    win.document.close();
+  };
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); mutation.mutate(); }} className="space-y-3">
-      <div className="space-y-1.5"><Label>Amount (₹)</Label><Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required min={1} /></div>
+      {remaining > 0 && (
+        <p className="text-xs text-muted-foreground">Remaining: <span className="font-semibold text-destructive">₹{remaining.toLocaleString("en-IN")}</span></p>
+      )}
+      <div className="space-y-1.5"><Label>Amount (₹)</Label><Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required min={1} step="0.01" /></div>
       <div className="space-y-1.5"><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
       <div className="space-y-1.5">
         <Label>Mode</Label>
@@ -257,9 +295,12 @@ function PaymentForm({ studentId, defaultYear, onSuccess }: { studentId: string;
         </Select>
       </div>
       <div className="space-y-1.5"><Label>Notes</Label><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
-      <Button type="submit" className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90" disabled={mutation.isPending}>
-        {mutation.isPending ? "Saving..." : "Record Payment"}
-      </Button>
+      <div className="flex gap-2">
+        <Button type="submit" className="flex-1 bg-secondary text-secondary-foreground hover:bg-secondary/90" disabled={mutation.isPending}>
+          {mutation.isPending ? "Saving..." : "Record Payment"}
+        </Button>
+        <Button type="button" variant="outline" onClick={printReceipt} disabled={!amount}>Print</Button>
+      </div>
     </form>
   );
 }
