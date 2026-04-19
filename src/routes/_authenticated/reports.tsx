@@ -312,7 +312,9 @@ function ReportsPage() {
                   <TableHead>Name</TableHead><TableHead>Class</TableHead><TableHead className="text-right">Present</TableHead><TableHead className="text-right">Days</TableHead><TableHead className="text-right">%</TableHead><TableHead className="text-right">Send</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {attRows.map((r) => (
+                  {attRows.length === 0 ? (
+                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">No active students for this filter</TableCell></TableRow>
+                  ) : attRows.map((r) => (
                     <TableRow key={r.id} className="hover:bg-muted/50">
                       <TableCell className="font-medium">{r.name}</TableCell>
                       <TableCell>{r.class}</TableCell>
