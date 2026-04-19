@@ -78,7 +78,8 @@ function ReportsPage() {
     queryKey: ["payments-all"],
     queryFn: async () => (await supabase.from("payments").select("*")).data || [],
   });
-  const pendingData = students.filter((s) => s.status === "active").map((s) => {
+  // Pending = current-AY active students only (the AY filter on `students` query already restricts to year)
+  const pendingData = students.filter((s) => s.status === "active" && s.academic_year === year).map((s) => {
     const paid = allPayments.filter((p) => p.student_id === s.id).reduce((sum, p) => sum + safeNum(p.amount), 0);
     const total = safeNum(s.total_fees) - safeNum(s.discount);
     return { ...s, paid, total, remaining: total - paid };
@@ -89,19 +90,20 @@ function ReportsPage() {
   const monthPayments = payments.filter((p) => p.payment_date >= monthStart && p.payment_date <= monthEnd);
   const monthTotal = monthPayments.reduce((sum, p) => sum + safeNum(p.amount), 0);
 
-  // Salary — fixed teachers only count for the month if they were marked present at least once
+  // Salary — fixed teachers always get full monthly salary (industry standard); UI shows present/working days for transparency
+  const workingDays = new Set(teacherAtt.map((a) => a.date)).size;
   const teacherSalaryData = teachers.map((t) => {
     const count = lectures.filter((l) => l.teacher_id === t.id).length;
     const presentDays = teacherAtt.filter((a) => a.teacher_id === t.id && a.status === "present").length;
     const salary = t.payment_type === "fixed"
-      ? (presentDays > 0 ? safeNum(t.fixed_salary) : 0)
+      ? safeNum(t.fixed_salary)
       : count * safeNum(t.per_lecture_fee);
     return { ...t, count, presentDays, salary };
   });
   const totalSalary = teacherSalaryData.reduce((sum, t) => sum + t.salary, 0);
 
-  // Attendance per student (this month) — uses its own class filter
-  const attRows = students.filter((s) => s.status === "active" && (attClass === "all" || s.class === attClass)).map((s) => {
+  // Attendance per student (this month) — uses its own class filter; AY-scoped via students query
+  const attRows = students.filter((s) => s.status === "active" && s.academic_year === year && (attClass === "all" || s.class === attClass)).map((s) => {
     const recs = allAttendance.filter((a) => a.student_id === s.id && a.date >= monthStart && a.date <= monthEnd);
     const present = recs.filter((r) => r.status === "present").length;
     const total = recs.length;
