@@ -4,10 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, IndianRupee, AlertTriangle, CalendarCheck, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Link } from "@tanstack/react-router";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { useAuth } from "@/lib/auth-context";
+import { useAcademicYear } from "@/lib/academic-year-context";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
@@ -15,19 +17,20 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 
 function DashboardPage() {
   const { user } = useAuth();
+  const { year } = useAcademicYear();
 
   const { data: students } = useQuery({
-    queryKey: ["students"],
+    queryKey: ["students", year],
     queryFn: async () => {
-      const { data } = await supabase.from("students").select("*").eq("status", "active");
+      const { data } = await supabase.from("students").select("*").eq("academic_year", year).eq("status", "active");
       return data || [];
     },
   });
 
   const { data: payments } = useQuery({
-    queryKey: ["payments"],
+    queryKey: ["payments", year],
     queryFn: async () => {
-      const { data } = await supabase.from("payments").select("*");
+      const { data } = await supabase.from("payments").select("*").eq("academic_year", year);
       return data || [];
     },
   });
@@ -74,11 +77,12 @@ function DashboardPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Welcome greeting */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-2xl font-bold font-display">Welcome back 👋</h1>
           <p className="text-sm text-muted-foreground">{format(new Date(), "EEEE, dd MMMM yyyy")} • {user?.email}</p>
         </div>
+        <Badge variant="outline" className="text-xs">Academic Year {year}</Badge>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -115,7 +119,7 @@ function DashboardPage() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base font-display">Top Pending Fees</CardTitle>
-              <Link to="/students-fees">
+              <Link to="/fees">
                 <Button variant="ghost" size="sm" className="text-xs">View All</Button>
               </Link>
             </div>
