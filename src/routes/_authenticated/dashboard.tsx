@@ -97,6 +97,7 @@ function DashboardPage() {
     if (!url) { toast.error(`Invalid mobile for ${student.name}`); return; }
     window.open(url, "_blank");
     await supabase.from("whatsapp_logs").insert({ student_id: student.id, message: msg, type: "reminder" });
+    toast.success(`Reminder opened for ${student.name}`);
   };
 
   return (

@@ -65,7 +65,7 @@ function TestsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tests"] });
-      queryClient.invalidateQueries({ queryKey: ["test-results"] });
+      queryClient.invalidateQueries({ queryKey: ["test-results", "by-test"] });
       if (selectedTestId) setSelectedTestId(null);
       toast.success("Test deleted");
     },
@@ -198,6 +198,17 @@ function MarksEntryTable({ test, students, results, onSaved }: { test: Tables<"t
   const saveMut = useMutation({
     mutationFn: async () => {
       const max = Number(test.max_marks);
+      // Detect entries that exceed max so we can warn the user (don't silently cap)
+      const overEntries = students.filter((s) => {
+        const v = initialMarks(s.id);
+        return v !== "" && Number(v) > max;
+      });
+      if (overEntries.length > 0) {
+        const names = overEntries.map((s) => s.name).join(", ");
+        if (!window.confirm(`Some marks exceed max (${max}) and will be capped: ${names}. Continue?`)) {
+          throw new Error("Cancelled");
+        }
+      }
       // Records to upsert (entered marks)
       const toUpsert = students
         .filter((s) => initialMarks(s.id) !== "")
@@ -220,7 +231,7 @@ function MarksEntryTable({ test, students, results, onSaved }: { test: Tables<"t
       }
     },
     onSuccess: () => { toast.success("Marks saved"); setMarks({}); onSaved(); },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => { if (e.message !== "Cancelled") toast.error(e.message); },
   });
 
   if (students.length === 0) {

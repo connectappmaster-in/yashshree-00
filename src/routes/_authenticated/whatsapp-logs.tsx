@@ -19,10 +19,20 @@ function WhatsAppLogsPage() {
   const { data: logs = [] } = useQuery({
     queryKey: ["whatsapp-logs"],
     queryFn: async () => {
-      const { data } = await supabase.from("whatsapp_logs").select("*, students(name, mobile)").order("sent_at", { ascending: false });
+      const { data } = await supabase.from("whatsapp_logs").select("*").order("sent_at", { ascending: false });
       return data || [];
     },
   });
+
+  // Separately fetch students and join in-memory (no FK in schema)
+  const { data: students = [] } = useQuery({
+    queryKey: ["students-all-min"],
+    queryFn: async () => {
+      const { data } = await supabase.from("students").select("id, name, mobile");
+      return data || [];
+    },
+  });
+  const studentMap = new Map(students.map((s) => [s.id, s]));
 
   const filtered = logs.filter((log) => {
     if (dateFrom && log.sent_at < dateFrom) return false;
@@ -61,14 +71,17 @@ function WhatsAppLogsPage() {
               {filtered.length === 0 ? (
                 <TableRow><TableCell colSpan={4} className="text-center py-10 text-muted-foreground">No logs found</TableCell></TableRow>
               ) : (
-                filtered.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell className="font-medium">{(log as any).students?.name || "—"}</TableCell>
-                    <TableCell className="max-w-[300px] truncate text-sm text-muted-foreground">{log.message}</TableCell>
-                    <TableCell><Badge variant="secondary">{log.type}</Badge></TableCell>
-                    <TableCell className="text-sm">{format(new Date(log.sent_at), "dd MMM yyyy, hh:mm a")}</TableCell>
-                  </TableRow>
-                ))
+                filtered.map((log) => {
+                  const st = studentMap.get(log.student_id);
+                  return (
+                    <TableRow key={log.id}>
+                      <TableCell className="font-medium">{st?.name || "—"}</TableCell>
+                      <TableCell className="max-w-[300px] truncate text-sm text-muted-foreground">{log.message}</TableCell>
+                      <TableCell><Badge variant="secondary">{log.type}</Badge></TableCell>
+                      <TableCell className="text-sm">{format(new Date(log.sent_at), "dd MMM yyyy, hh:mm a")}</TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>

@@ -75,12 +75,13 @@ function TeachersPage() {
     onError: (e) => toast.error(e.message),
   });
 
+  const workingDays = new Set(teacherAtt.map((a) => a.date)).size;
   const teacherStats = teachers.map((t) => {
     const tl = lectures.filter((l) => l.teacher_id === t.id);
     const presentDays = teacherAtt.filter((a) => a.teacher_id === t.id && a.status === "present").length;
-    // Fixed teachers: only paid for the selected month if they were marked present at least once
+    // Fixed teachers always get full monthly salary; per-lecture is count × fee
     const salary = t.payment_type === "fixed"
-      ? (presentDays > 0 ? Number(t.fixed_salary) : 0)
+      ? Number(t.fixed_salary)
       : tl.length * Number(t.per_lecture_fee);
     return { ...t, lectureCount: tl.length, presentDays, salary };
   });
@@ -142,7 +143,12 @@ function TeachersPage() {
                         {t.payment_type === "fixed" ? `Fixed ₹${Number(t.fixed_salary).toLocaleString("en-IN")}` : `₹${Number(t.per_lecture_fee).toLocaleString("en-IN")}/lec`}
                       </TableCell>
                       <TableCell className="text-right">{t.lectureCount}</TableCell>
-                      <TableCell className="text-right font-bold">₹{t.salary.toLocaleString("en-IN")}</TableCell>
+                      <TableCell className="text-right font-bold">
+                        ₹{t.salary.toLocaleString("en-IN")}
+                        {t.payment_type === "fixed" && workingDays > 0 && (
+                          <span className="block text-[10px] font-normal text-muted-foreground">{t.presentDays}/{workingDays} days</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setLectureTeacherId(t.id); setLectureDialogOpen(true); }} title="Log Lecture">
@@ -339,18 +345,33 @@ function LectureForm({ teacherId, teachers, defaultYear, onSuccess }: { teacherI
 
   const mutation = useMutation({
     mutationFn: async () => {
+      const subj = subject.trim();
+      if (!subj) throw new Error("Subject is required");
       const ay = deriveAcademicYear(date) || defaultYear;
+      // Warn (don't block) on duplicates: same teacher + date + subject + batch
+      const { data: dupes } = await supabase
+        .from("lectures")
+        .select("id")
+        .eq("teacher_id", teacherId)
+        .eq("date", date)
+        .eq("subject", subj)
+        .eq("batch", batch);
+      if (dupes && dupes.length > 0) {
+        if (!window.confirm("A lecture with same teacher, date, subject and batch already exists. Log another?")) {
+          throw new Error("Cancelled");
+        }
+      }
       const { error } = await supabase.from("lectures").insert({
         teacher_id: teacherId,
         date,
-        subject: subject.trim(),
+        subject: subj,
         batch,
         academic_year: ay,
       });
       if (error) throw error;
     },
     onSuccess: () => { toast.success("Lecture logged"); onSuccess(); },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => { if (e.message !== "Cancelled") toast.error(e.message); },
   });
 
   return (

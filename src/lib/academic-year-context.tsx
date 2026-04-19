@@ -11,7 +11,12 @@ interface AcademicYearContextValue {
 const AcademicYearContext = createContext<AcademicYearContextValue | null>(null);
 
 export function AcademicYearProvider({ children }: { children: ReactNode }) {
-  const [year, setYearState] = useState<string>("2025-26");
+  // Default to today's academic year (April–March cycle), fallback to first listed
+  const initial = (() => {
+    const derived = deriveAcademicYear(new Date());
+    return ACADEMIC_YEARS.includes(derived) ? derived : ACADEMIC_YEARS[0];
+  })();
+  const [year, setYearState] = useState<string>(initial);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

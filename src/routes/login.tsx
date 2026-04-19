@@ -26,6 +26,11 @@ function LoginPage() {
     }
   }, [isReady, isAuthenticated, navigate]);
 
+  // Render a blank shell until we know auth state, or if user is already logged in (preventing flash)
+  if (!isReady || isAuthenticated) {
+    return <div className="flex min-h-screen items-center justify-center bg-primary" />;
+  }
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
