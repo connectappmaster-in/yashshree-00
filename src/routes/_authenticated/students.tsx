@@ -18,6 +18,7 @@ import { format } from "date-fns";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAcademicYear, deriveAcademicYear } from "@/lib/academic-year-context";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { safeNum } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/students")({
   component: StudentsPage,
@@ -58,9 +59,10 @@ function StudentsPage() {
   });
 
   const { data: payments = [] } = useQuery({
-    queryKey: ["payments", year],
+    queryKey: ["payments-all"],
     queryFn: async () => {
-      const { data } = await supabase.from("payments").select("*").eq("academic_year", year).order("payment_date", { ascending: false });
+      // All payments across years — student fees may be paid before AY change
+      const { data } = await supabase.from("payments").select("*").order("payment_date", { ascending: false });
       return data || [];
     },
   });
@@ -107,8 +109,8 @@ function StudentsPage() {
 
   const studentSummary = students.map((s) => {
     const sp = payments.filter((p) => p.student_id === s.id);
-    const paid = sp.reduce((sum, p) => sum + Number(p.amount), 0);
-    const total = Number(s.total_fees) - Number(s.discount);
+    const paid = sp.reduce((sum, p) => sum + safeNum(p.amount), 0);
+    const total = safeNum(s.total_fees) - safeNum(s.discount);
     return { ...s, paid, total, remaining: total - paid, studentPayments: sp };
   });
 
