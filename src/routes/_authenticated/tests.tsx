@@ -48,7 +48,7 @@ function TestsPage() {
   });
 
   const { data: results = [] } = useQuery({
-    queryKey: ["test-results", selectedTestId],
+    queryKey: ["test-results", "by-test", selectedTestId],
     queryFn: async () => {
       if (!selectedTestId) return [];
       const { data } = await supabase.from("test_results").select("*").eq("test_id", selectedTestId);
@@ -59,15 +59,17 @@ function TestsPage() {
 
   const deleteTestMut = useMutation({
     mutationFn: async (id: string) => {
-      await supabase.from("test_results").delete().eq("test_id", id);
+      // test_results cascade-delete via FK; just remove the test
       const { error } = await supabase.from("tests").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tests"] });
+      queryClient.invalidateQueries({ queryKey: ["test-results"] });
       if (selectedTestId) setSelectedTestId(null);
       toast.success("Test deleted");
     },
+    onError: (e) => toast.error(e.message),
   });
 
   const filteredTests = tests.filter((t) => filterStandard === "all" || t.standard === filterStandard);
@@ -171,7 +173,9 @@ function TestsPage() {
                   test={selectedTest}
                   students={standardStudents}
                   results={results}
-                  onSaved={() => queryClient.invalidateQueries({ queryKey: ["test-results"] })}
+                  onSaved={() => {
+                    queryClient.invalidateQueries({ queryKey: ["test-results"] });
+                  }}
                 />
               </CardContent>
             </Card>

@@ -37,10 +37,15 @@ function DashboardPage() {
   });
 
   const { data: todayAttendance } = useQuery({
-    queryKey: ["attendance-today"],
+    queryKey: ["attendance-today", year],
     queryFn: async () => {
       const today = format(new Date(), "yyyy-MM-dd");
-      const { data } = await supabase.from("attendance").select("*").eq("date", today).eq("status", "present");
+      const { data } = await supabase
+        .from("attendance")
+        .select("*")
+        .eq("date", today)
+        .eq("status", "present")
+        .eq("academic_year", year);
       return data || [];
     },
   });
@@ -70,9 +75,10 @@ function DashboardPage() {
     };
   });
 
-  const sendReminder = (student: typeof studentPending[0]) => {
+  const sendReminder = async (student: typeof studentPending[0]) => {
     const msg = `Hello ${student.name}, your pending fees for Yashshree Classes is ₹${student.remaining.toLocaleString("en-IN")}. Please pay before ${student.fee_due_day}th of this month. Thank you.`;
     window.open(`https://wa.me/91${student.mobile}?text=${encodeURIComponent(msg)}`, "_blank");
+    await supabase.from("whatsapp_logs").insert({ student_id: student.id, message: msg, type: "reminder" });
   };
 
   return (

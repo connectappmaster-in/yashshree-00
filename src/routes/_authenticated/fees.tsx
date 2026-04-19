@@ -71,16 +71,21 @@ function FeesPage() {
     toast.success(`Reminder sent to ${s.name}`);
   };
 
-  const sendBulk = () => {
+  const sendBulk = async () => {
     const pending = filtered.filter((s) => s.remaining > 0);
     if (pending.length === 0) { toast.info("No pending fees"); return; }
-    pending.forEach((s) => {
-      const msg = `Hello ${s.name}, pending: ₹${s.remaining.toLocaleString("en-IN")}.`;
-      supabase.from("whatsapp_logs").insert({ student_id: s.id, message: msg, type: "reminder" });
-    });
+    const confirmed = window.confirm(
+      `WhatsApp Web only opens one chat at a time. This will log reminders for ${pending.length} students and open the first chat. Continue?`
+    );
+    if (!confirmed) return;
+    for (const s of pending) {
+      const msg = `Hello ${s.name}, your pending fees for Yashshree Classes is ₹${s.remaining.toLocaleString("en-IN")}. Please pay before ${s.fee_due_day}th of this month. Thank you.`;
+      await supabase.from("whatsapp_logs").insert({ student_id: s.id, message: msg, type: "reminder" });
+    }
     const first = pending[0];
-    window.open(`https://wa.me/91${first.mobile}?text=${encodeURIComponent(`Hello ${first.name}, pending: ₹${first.remaining.toLocaleString("en-IN")}.`)}`, "_blank");
-    toast.success(`Bulk reminders logged for ${pending.length} students`);
+    const firstMsg = `Hello ${first.name}, your pending fees for Yashshree Classes is ₹${first.remaining.toLocaleString("en-IN")}. Please pay before ${first.fee_due_day}th of this month. Thank you.`;
+    window.open(`https://wa.me/91${first.mobile}?text=${encodeURIComponent(firstMsg)}`, "_blank");
+    toast.success(`${pending.length} reminders logged. Open each student individually to send the rest.`);
   };
 
   const openPayment = (id: string) => { setPaymentStudentId(id); setPaymentDialogOpen(true); };

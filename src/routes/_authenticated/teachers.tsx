@@ -54,9 +54,9 @@ function TeachersPage() {
   });
 
   const { data: teacherAtt = [] } = useQuery({
-    queryKey: ["teacher-attendance", selectedMonth],
+    queryKey: ["teacher-attendance", selectedMonth, year],
     queryFn: async () => {
-      const { data } = await supabase.from("teacher_attendance").select("*").gte("date", monthStart).lte("date", monthEnd);
+      const { data } = await supabase.from("teacher_attendance").select("*").eq("academic_year", year).gte("date", monthStart).lte("date", monthEnd);
       return data || [];
     },
   });
@@ -68,14 +68,21 @@ function TeachersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["teachers"] });
-      toast.success("Teacher deleted");
+      queryClient.invalidateQueries({ queryKey: ["lectures"] });
+      queryClient.invalidateQueries({ queryKey: ["teacher-attendance"] });
+      toast.success("Teacher and all records deleted");
     },
+    onError: (e) => toast.error(e.message),
   });
 
   const teacherStats = teachers.map((t) => {
     const tl = lectures.filter((l) => l.teacher_id === t.id);
-    const salary = t.payment_type === "fixed" ? Number(t.fixed_salary) : tl.length * Number(t.per_lecture_fee);
-    return { ...t, lectureCount: tl.length, salary };
+    const presentDays = teacherAtt.filter((a) => a.teacher_id === t.id && a.status === "present").length;
+    // Fixed teachers: only paid for the selected month if they were marked present at least once
+    const salary = t.payment_type === "fixed"
+      ? (presentDays > 0 ? Number(t.fixed_salary) : 0)
+      : tl.length * Number(t.per_lecture_fee);
+    return { ...t, lectureCount: tl.length, presentDays, salary };
   });
 
   const totalSalary = teacherStats.reduce((sum, t) => sum + t.salary, 0);
@@ -177,7 +184,7 @@ function TeachersPage() {
         </TabsContent>
 
         <TabsContent value="attendance" className="mt-3">
-          <TeacherAttendanceView teachers={teachers} attRecords={teacherAtt} />
+          <TeacherAttendanceView teachers={teachers} attRecords={teacherAtt} year={year} />
         </TabsContent>
       </Tabs>
 
@@ -196,7 +203,7 @@ function TeachersPage() {
   );
 }
 
-function TeacherAttendanceView({ teachers, attRecords }: { teachers: Tables<"teachers">[]; attRecords: Tables<"teacher_attendance">[] }) {
+function TeacherAttendanceView({ teachers, attRecords, year }: { teachers: Tables<"teachers">[]; attRecords: (Tables<"teacher_attendance"> & { academic_year?: string })[]; year: string }) {
   const queryClient = useQueryClient();
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [pending, setPending] = useState<Record<string, "present" | "absent">>({});
@@ -215,14 +222,19 @@ function TeacherAttendanceView({ teachers, attRecords }: { teachers: Tables<"tea
 
   const saveMut = useMutation({
     mutationFn: async () => {
-      const recs = teachers.map((t) => ({ teacher_id: t.id, date, status: getStatus(t.id) }));
+      // Only persist toggled rows — never overwrite untouched teachers
+      const changedIds = Object.keys(pending);
+      if (changedIds.length === 0) return 0;
+      const recs = changedIds.map((id) => ({ teacher_id: id, date, status: pending[id], academic_year: year }));
       for (const r of recs) {
         const { error } = await supabase.from("teacher_attendance").upsert(r, { onConflict: "teacher_id,date" });
         if (error) throw error;
       }
+      return recs.length;
     },
-    onSuccess: () => {
-      toast.success("Teacher attendance saved");
+    onSuccess: (count) => {
+      if (count === 0) { toast.info("No changes to save"); return; }
+      toast.success(`Saved (${count} ${count === 1 ? "teacher" : "teachers"})`);
       setPending({});
       queryClient.invalidateQueries({ queryKey: ["teacher-attendance"] });
     },

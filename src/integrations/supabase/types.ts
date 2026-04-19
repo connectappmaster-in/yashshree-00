@@ -205,6 +205,7 @@ export type Database = {
       }
       teacher_attendance: {
         Row: {
+          academic_year: string
           created_at: string
           date: string
           id: string
@@ -212,6 +213,7 @@ export type Database = {
           teacher_id: string
         }
         Insert: {
+          academic_year?: string
           created_at?: string
           date?: string
           id?: string
@@ -219,13 +221,22 @@ export type Database = {
           teacher_id: string
         }
         Update: {
+          academic_year?: string
           created_at?: string
           date?: string
           id?: string
           status?: string
           teacher_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "teacher_attendance_teacher_id_fkey"
+            columns: ["teacher_id"]
+            isOneToOne: false
+            referencedRelation: "teachers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       teachers: {
         Row: {
@@ -282,7 +293,22 @@ export type Database = {
           student_id?: string
           test_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "test_results_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_results_test_id_fkey"
+            columns: ["test_id"]
+            isOneToOne: false
+            referencedRelation: "tests"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tests: {
         Row: {

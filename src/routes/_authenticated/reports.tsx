@@ -29,6 +29,7 @@ function ReportsPage() {
   const { year } = useAcademicYear();
   const [filterClass, setFilterClass] = useState("all");
   const [filterMedium, setFilterMedium] = useState("all");
+  const [attClass, setAttClass] = useState("all");
   const [reportMonth, setReportMonth] = useState(format(new Date(), "yyyy-MM"));
   const [waDialogOpen, setWaDialogOpen] = useState(false);
   const [waStudent, setWaStudent] = useState<{ id: string; name: string; mobile: string } | null>(null);
@@ -86,8 +87,8 @@ function ReportsPage() {
   });
   const totalSalary = teacherSalaryData.reduce((sum, t) => sum + t.salary, 0);
 
-  // Attendance per student (this month)
-  const attRows = filteredStudents.filter((s) => s.status === "active").map((s) => {
+  // Attendance per student (this month) — uses its own class filter
+  const attRows = students.filter((s) => s.status === "active" && (attClass === "all" || s.class === attClass)).map((s) => {
     const recs = allAttendance.filter((a) => a.student_id === s.id && a.date >= monthStart && a.date <= monthEnd);
     const present = recs.filter((r) => r.status === "present").length;
     const total = recs.length;
@@ -274,7 +275,7 @@ function ReportsPage() {
         <TabsContent value="attendance" className="mt-4 space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
             <input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} className="border rounded-md px-3 py-2 text-sm bg-background" />
-            <Select value={filterClass} onValueChange={setFilterClass}>
+            <Select value={attClass} onValueChange={setAttClass}>
               <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Classes</SelectItem>

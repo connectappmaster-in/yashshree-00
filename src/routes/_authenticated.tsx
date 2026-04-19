@@ -1,34 +1,20 @@
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
-import { useAuth } from "@/lib/auth-context";
+import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { AdminTopNav } from "@/components/AdminTopNav";
-import { useEffect } from "react";
 import { AcademicYearProvider } from "@/lib/academic-year-context";
 import { ThemeProvider } from "@/lib/theme-context";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated")({
+  beforeLoad: async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      throw redirect({ to: "/login" });
+    }
+  },
   component: AuthenticatedLayout,
 });
 
 function AuthenticatedLayout() {
-  const { isAuthenticated, isReady } = useAuth();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (isReady && !isAuthenticated) {
-      navigate({ to: "/login" as string });
-    }
-  }, [isAuthenticated, isReady, navigate]);
-
-  if (!isReady) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) return null;
-
   return (
     <ThemeProvider>
       <AcademicYearProvider>
