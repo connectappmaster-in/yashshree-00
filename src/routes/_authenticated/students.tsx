@@ -98,6 +98,7 @@ function StudentsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["students"] });
+      queryClient.invalidateQueries({ queryKey: ["payments-all"] });
       queryClient.invalidateQueries({ queryKey: ["payments"] });
       queryClient.invalidateQueries({ queryKey: ["attendance-all"] });
       queryClient.invalidateQueries({ queryKey: ["test-results"] });
@@ -473,8 +474,8 @@ function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"stu
         medium: form.medium,
         subjects: form.subjects,
         admission_date: form.admission_date,
-        total_fees: Number(form.total_fees) || 0,
-        discount: Number(form.discount) || 0,
+        total_fees: safeNum(form.total_fees),
+        discount: safeNum(form.discount),
         batch: form.batch,
         lecture_days: form.lecture_days,
         fee_due_day: Number(form.fee_due_day) || 1,
