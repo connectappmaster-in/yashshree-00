@@ -111,14 +111,20 @@ function DashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Total Students" value={totalStudents} icon={Users} gradient="from-primary/10 to-primary/5" iconBg="bg-primary/15" iconColor="text-primary" />
-        <StatCard title="Fees Collected" value={showCollected ? `₹${totalCollected.toLocaleString("en-IN")}` : "₹ • • • • •"} icon={IndianRupee} gradient="from-success/10 to-success/5" iconBg="bg-success/15" iconColor="text-success" action={
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowCollected((v) => !v)} title={showCollected ? "Hide amount" : "Show amount"}>
-            {showCollected ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-          </Button>
-        } />
-        <StatCard title="Pending Fees" value={`₹${Math.max(0, pendingFees).toLocaleString("en-IN")}`} icon={AlertTriangle} gradient="from-destructive/10 to-destructive/5" iconBg="bg-destructive/15" iconColor="text-destructive" />
-        <StatCard title="Present Today" value={todayPresent} icon={CalendarCheck} gradient="from-accent/10 to-accent/5" iconBg="bg-accent/15" iconColor="text-accent" />
+        {studentsLoading ? (
+          <CardsSkeleton count={4} />
+        ) : (
+          <>
+            <StatCard title="Total Students" value={totalStudents} icon={Users} gradient="from-primary/10 to-primary/5" iconBg="bg-primary/15" iconColor="text-primary" />
+            <StatCard title="Fees Collected" value={showCollected ? `₹${totalCollected.toLocaleString("en-IN")}` : "₹ • • • • •"} icon={IndianRupee} gradient="from-success/10 to-success/5" iconBg="bg-success/15" iconColor="text-success" action={
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowCollected((v) => !v)} title={showCollected ? "Hide amount" : "Show amount"}>
+                {showCollected ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </Button>
+            } />
+            <StatCard title="Pending Fees" value={`₹${Math.max(0, pendingFees).toLocaleString("en-IN")}`} icon={AlertTriangle} gradient="from-destructive/10 to-destructive/5" iconBg="bg-destructive/15" iconColor="text-destructive" />
+            <StatCard title="Present Today" value={todayPresent} icon={CalendarCheck} gradient="from-accent/10 to-accent/5" iconBg="bg-accent/15" iconColor="text-accent" />
+          </>
+        )}
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
