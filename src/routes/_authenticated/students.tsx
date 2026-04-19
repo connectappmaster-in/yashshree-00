@@ -96,9 +96,13 @@ function StudentsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["students"] });
+      queryClient.invalidateQueries({ queryKey: ["payments"] });
+      queryClient.invalidateQueries({ queryKey: ["attendance-all"] });
+      queryClient.invalidateQueries({ queryKey: ["test-results"] });
       if (selectedId) setSelectedId(null);
-      toast.success("Student deleted");
+      toast.success("Student and all related records deleted");
     },
+    onError: (e) => toast.error(e.message),
   });
 
   const studentSummary = students.map((s) => {

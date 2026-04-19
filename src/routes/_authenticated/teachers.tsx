@@ -68,8 +68,11 @@ function TeachersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["teachers"] });
-      toast.success("Teacher deleted");
+      queryClient.invalidateQueries({ queryKey: ["lectures"] });
+      queryClient.invalidateQueries({ queryKey: ["teacher-attendance"] });
+      toast.success("Teacher and all records deleted");
     },
+    onError: (e) => toast.error(e.message),
   });
 
   const teacherStats = teachers.map((t) => {
