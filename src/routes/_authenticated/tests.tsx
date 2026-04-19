@@ -174,7 +174,7 @@ function TestsPage() {
                   students={standardStudents}
                   results={results}
                   onSaved={() => {
-                    queryClient.invalidateQueries({ queryKey: ["test-results"] });
+                    queryClient.invalidateQueries({ queryKey: ["test-results", "by-test", selectedTestId] });
                   }}
                 />
               </CardContent>
@@ -198,13 +198,24 @@ function MarksEntryTable({ test, students, results, onSaved }: { test: Tables<"t
   const saveMut = useMutation({
     mutationFn: async () => {
       const max = Number(test.max_marks);
-      const records = students.map((s) => ({
-        test_id: test.id,
-        student_id: s.id,
-        marks_obtained: Math.min(max, Number(initialMarks(s.id)) || 0),
-      })).filter((r) => initialMarks(r.student_id) !== "");
-      for (const r of records) {
+      // Records to upsert (entered marks)
+      const toUpsert = students
+        .filter((s) => initialMarks(s.id) !== "")
+        .map((s) => ({
+          test_id: test.id,
+          student_id: s.id,
+          marks_obtained: Math.min(max, Number(initialMarks(s.id)) || 0),
+        }));
+      // Records to delete: previously had marks but user cleared them
+      const toDelete = students
+        .filter((s) => initialMarks(s.id) === "" && results.some((r) => r.student_id === s.id))
+        .map((s) => s.id);
+      for (const r of toUpsert) {
         const { error } = await supabase.from("test_results").upsert(r, { onConflict: "test_id,student_id" });
+        if (error) throw error;
+      }
+      if (toDelete.length > 0) {
+        const { error } = await supabase.from("test_results").delete().eq("test_id", test.id).in("student_id", toDelete);
         if (error) throw error;
       }
     },
