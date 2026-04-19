@@ -345,18 +345,33 @@ function LectureForm({ teacherId, teachers, defaultYear, onSuccess }: { teacherI
 
   const mutation = useMutation({
     mutationFn: async () => {
+      const subj = subject.trim();
+      if (!subj) throw new Error("Subject is required");
       const ay = deriveAcademicYear(date) || defaultYear;
+      // Warn (don't block) on duplicates: same teacher + date + subject + batch
+      const { data: dupes } = await supabase
+        .from("lectures")
+        .select("id")
+        .eq("teacher_id", teacherId)
+        .eq("date", date)
+        .eq("subject", subj)
+        .eq("batch", batch);
+      if (dupes && dupes.length > 0) {
+        if (!window.confirm("A lecture with same teacher, date, subject and batch already exists. Log another?")) {
+          throw new Error("Cancelled");
+        }
+      }
       const { error } = await supabase.from("lectures").insert({
         teacher_id: teacherId,
         date,
-        subject: subject.trim(),
+        subject: subj,
         batch,
         academic_year: ay,
       });
       if (error) throw error;
     },
     onSuccess: () => { toast.success("Lecture logged"); onSuccess(); },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => { if (e.message !== "Cancelled") toast.error(e.message); },
   });
 
   return (
