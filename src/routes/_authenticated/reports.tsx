@@ -148,11 +148,23 @@ function ReportsPage() {
     setWaDialogOpen(false);
   };
 
+  const setMonthPreset = (offset: number) => {
+    const d = subMonths(new Date(), offset);
+    setReportMonth(format(d, "yyyy-MM"));
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center gap-2">
-        <h1 className="text-2xl font-bold font-display">Reports</h1>
-        <Badge variant="outline" className="text-xs">AY {year}</Badge>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold font-display">Reports</h1>
+          <Badge variant="outline" className="text-xs">AY {year}</Badge>
+        </div>
+        <div className="flex gap-1 flex-wrap">
+          <Button variant="outline" size="sm" onClick={() => setMonthPreset(0)}>This Month</Button>
+          <Button variant="outline" size="sm" onClick={() => setMonthPreset(1)}>Last Month</Button>
+          <Button variant="outline" size="sm" onClick={() => setMonthPreset(3)}>3 Months Ago</Button>
+        </div>
       </div>
 
       <Tabs defaultValue="students">
