@@ -140,7 +140,9 @@ function ReportsPage() {
     const total = recs.length;
     const pct = total > 0 ? Math.round((present / total) * 100) : 0;
     const msg = `Yashshree Classes — ${waFreq} Attendance Report for ${waStudent.name}: ${present}/${total} days present (${pct}%). Period: last ${days} days.`;
-    window.open(`https://wa.me/91${waStudent.mobile}?text=${encodeURIComponent(msg)}`, "_blank");
+    const url = buildWhatsappUrl(waStudent.mobile, msg);
+    if (!url) { toast.error("Invalid mobile number"); return; }
+    window.open(url, "_blank");
     await supabase.from("whatsapp_logs").insert({ student_id: waStudent.id, message: msg, type: "attendance" });
     toast.success("Report sent");
     setWaDialogOpen(false);
