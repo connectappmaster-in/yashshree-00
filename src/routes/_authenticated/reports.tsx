@@ -129,19 +129,23 @@ function ReportsPage() {
 
   const sendWhatsapp = async () => {
     if (!waStudent) return;
-    const days = waFreq === "Weekly" ? 7 : waFreq === "Monthly" ? 30 : waFreq === "Quarterly" ? 90 : 365;
-    const fromDate = format(
-      waFreq === "Weekly" ? subDays(new Date(), 7) :
-      waFreq === "Monthly" ? subMonths(new Date(), 1) :
-      waFreq === "Quarterly" ? subMonths(new Date(), 3) :
-      subYears(new Date(), 1),
-      "yyyy-MM-dd"
-    );
-    const recs = allAttendance.filter((a) => a.student_id === waStudent.id && a.date >= fromDate);
+    // Match periods to UI labels: Weekly = last 7 days, Monthly = the selected report month, else rolling N months
+    const label =
+      waFreq === "Weekly" ? "last 7 days" :
+      waFreq === "Monthly" ? format(new Date(reportMonth + "-01"), "MMMM yyyy") :
+      waFreq === "Quarterly" ? "last 3 months" :
+      "last 12 months";
+    const fromDate =
+      waFreq === "Weekly" ? format(subDays(new Date(), 7), "yyyy-MM-dd") :
+      waFreq === "Monthly" ? monthStart :
+      waFreq === "Quarterly" ? format(subMonths(new Date(), 3), "yyyy-MM-dd") :
+      format(subYears(new Date(), 1), "yyyy-MM-dd");
+    const toDate = waFreq === "Monthly" ? monthEnd : format(new Date(), "yyyy-MM-dd");
+    const recs = allAttendance.filter((a) => a.student_id === waStudent.id && a.date >= fromDate && a.date <= toDate);
     const present = recs.filter((r) => r.status === "present").length;
     const total = recs.length;
     const pct = total > 0 ? Math.round((present / total) * 100) : 0;
-    const msg = `Yashshree Classes — ${waFreq} Attendance Report for ${waStudent.name}: ${present}/${total} days present (${pct}%). Period: last ${days} days.`;
+    const msg = `Yashshree Classes — ${waFreq} Attendance Report for ${waStudent.name}: ${present}/${total} days present (${pct}%). Period: ${label}.`;
     const url = buildWhatsappUrl(waStudent.mobile, msg);
     if (!url) { toast.error("Invalid mobile number"); return; }
     window.open(url, "_blank");
@@ -363,15 +367,16 @@ function ReportsPage() {
             <CardContent className="p-0">
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>Teacher</TableHead><TableHead>Subject</TableHead><TableHead>Type</TableHead><TableHead className="text-right">Lectures</TableHead><TableHead className="text-right">Salary</TableHead>
+                  <TableHead>Teacher</TableHead><TableHead>Subject</TableHead><TableHead>Type</TableHead><TableHead className="text-right">Lectures</TableHead><TableHead className="text-right">Attendance</TableHead><TableHead className="text-right">Salary</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {teacherSalaryData.map((t) => (
                     <TableRow key={t.id}>
                       <TableCell className="font-medium">{t.name}</TableCell>
                       <TableCell>{t.subject}</TableCell>
-                      <TableCell className="text-xs">{t.payment_type}</TableCell>
+                      <TableCell className="text-xs">{t.payment_type === "fixed" ? "Fixed monthly" : "Per lecture"}</TableCell>
                       <TableCell className="text-right">{t.count}</TableCell>
+                      <TableCell className="text-right text-xs text-muted-foreground">{t.presentDays}/{workingDays} days</TableCell>
                       <TableCell className="text-right font-bold">₹{t.salary.toLocaleString("en-IN")}</TableCell>
                     </TableRow>
                   ))}
