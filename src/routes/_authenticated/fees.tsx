@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Search, MessageCircle, IndianRupee, Send } from "lucide-react";
 import { format } from "date-fns";
 import { useAcademicYear, deriveAcademicYear } from "@/lib/academic-year-context";
+import { safeNum, buildWhatsappUrl, nextDueLabel } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/fees")({
   component: FeesPage,
@@ -39,7 +40,17 @@ function FeesPage() {
     },
   });
 
+  // All payments (across years) so a student who paid earlier still shows correct remaining
   const { data: payments = [] } = useQuery({
+    queryKey: ["payments-all"],
+    queryFn: async () => {
+      const { data } = await supabase.from("payments").select("*");
+      return data || [];
+    },
+  });
+
+  // AY-only payments for the "Collected this year" total card
+  const { data: ayPayments = [] } = useQuery({
     queryKey: ["payments", year],
     queryFn: async () => {
       const { data } = await supabase.from("payments").select("*").eq("academic_year", year);
@@ -49,8 +60,8 @@ function FeesPage() {
 
   const studentFees = students.map((s) => {
     const sp = payments.filter((p) => p.student_id === s.id);
-    const paid = sp.reduce((sum, p) => sum + Number(p.amount), 0);
-    const total = Number(s.total_fees) - Number(s.discount);
+    const paid = sp.reduce((sum, p) => sum + safeNum(p.amount), 0);
+    const total = safeNum(s.total_fees) - safeNum(s.discount);
     return { ...s, paid, total, remaining: total - paid };
   });
 
@@ -62,30 +73,35 @@ function FeesPage() {
   }).sort((a, b) => b.remaining - a.remaining);
 
   const totalPending = filtered.reduce((sum, s) => sum + Math.max(0, s.remaining), 0);
-  const totalCollected = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+  const totalCollected = ayPayments.reduce((sum, p) => sum + safeNum(p.amount), 0);
 
   const sendReminder = async (s: typeof studentFees[0]) => {
-    const msg = `Hello ${s.name}, your pending fees for Yashshree Classes is ₹${s.remaining.toLocaleString("en-IN")}. Please pay before ${s.fee_due_day}th of this month. Thank you.`;
-    window.open(`https://wa.me/91${s.mobile}?text=${encodeURIComponent(msg)}`, "_blank");
+    const msg = `Hello ${s.name}, your pending fees for Yashshree Classes is ₹${s.remaining.toLocaleString("en-IN")}. Please pay before ${nextDueLabel(s.fee_due_day)}. Thank you.`;
+    const url = buildWhatsappUrl(s.mobile, msg);
+    if (!url) { toast.error(`Invalid mobile for ${s.name}`); return; }
+    window.open(url, "_blank");
     await supabase.from("whatsapp_logs").insert({ student_id: s.id, message: msg, type: "reminder" });
     toast.success(`Reminder sent to ${s.name}`);
   };
 
+  // Bulk: log every reminder, open one tab at a time with a 600ms delay so the browser doesn't block popups.
   const sendBulk = async () => {
-    const pending = filtered.filter((s) => s.remaining > 0);
-    if (pending.length === 0) { toast.info("No pending fees"); return; }
+    const pending = filtered.filter((s) => s.remaining > 0 && buildWhatsappUrl(s.mobile, "x"));
+    if (pending.length === 0) { toast.info("No pending fees with valid mobiles"); return; }
     const confirmed = window.confirm(
-      `WhatsApp Web only opens one chat at a time. This will log reminders for ${pending.length} students and open the first chat. Continue?`
+      `This will log ${pending.length} WhatsApp reminders and open ${pending.length} tabs (one per student). Your browser may block tabs after the first — allow popups for this site. Continue?`
     );
     if (!confirmed) return;
+    let idx = 0;
     for (const s of pending) {
-      const msg = `Hello ${s.name}, your pending fees for Yashshree Classes is ₹${s.remaining.toLocaleString("en-IN")}. Please pay before ${s.fee_due_day}th of this month. Thank you.`;
+      const msg = `Hello ${s.name}, your pending fees for Yashshree Classes is ₹${s.remaining.toLocaleString("en-IN")}. Please pay before ${nextDueLabel(s.fee_due_day)}. Thank you.`;
+      const url = buildWhatsappUrl(s.mobile, msg)!;
+      // Stagger opens so popup blocker is friendlier
+      setTimeout(() => window.open(url, "_blank"), idx * 600);
       await supabase.from("whatsapp_logs").insert({ student_id: s.id, message: msg, type: "reminder" });
+      idx++;
     }
-    const first = pending[0];
-    const firstMsg = `Hello ${first.name}, your pending fees for Yashshree Classes is ₹${first.remaining.toLocaleString("en-IN")}. Please pay before ${first.fee_due_day}th of this month. Thank you.`;
-    window.open(`https://wa.me/91${first.mobile}?text=${encodeURIComponent(firstMsg)}`, "_blank");
-    toast.success(`${pending.length} reminders logged. Open each student individually to send the rest.`);
+    toast.success(`${pending.length} reminders queued.`);
   };
 
   const openPayment = (id: string) => { setPaymentStudentId(id); setPaymentDialogOpen(true); };
