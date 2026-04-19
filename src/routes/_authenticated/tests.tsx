@@ -48,7 +48,7 @@ function TestsPage() {
   });
 
   const { data: results = [] } = useQuery({
-    queryKey: ["test-results", selectedTestId],
+    queryKey: ["test-results", "by-test", selectedTestId],
     queryFn: async () => {
       if (!selectedTestId) return [];
       const { data } = await supabase.from("test_results").select("*").eq("test_id", selectedTestId);
@@ -171,7 +171,9 @@ function TestsPage() {
                   test={selectedTest}
                   students={standardStudents}
                   results={results}
-                  onSaved={() => queryClient.invalidateQueries({ queryKey: ["test-results"] })}
+                  onSaved={() => {
+                    queryClient.invalidateQueries({ queryKey: ["test-results"] });
+                  }}
                 />
               </CardContent>
             </Card>
