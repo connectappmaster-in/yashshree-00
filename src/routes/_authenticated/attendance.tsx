@@ -11,25 +11,27 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { format, startOfMonth, endOfMonth } from "date-fns";
+import { useAcademicYear } from "@/lib/academic-year-context";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
   component: AttendancePage,
 });
 
-const CLASSES = ["8th", "9th", "10th", "11th", "12th"];
+const CLASSES = ["5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th"];
 const BATCHES = ["Morning", "Evening"];
 
 function AttendancePage() {
   const queryClient = useQueryClient();
+  const { year } = useAcademicYear();
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [filterClass, setFilterClass] = useState("all");
   const [filterBatch, setFilterBatch] = useState("all");
   const [attendance, setAttendance] = useState<Record<string, "present" | "absent">>({});
 
   const { data: students = [] } = useQuery({
-    queryKey: ["students-active"],
+    queryKey: ["students-active", year],
     queryFn: async () => {
-      const { data } = await supabase.from("students").select("*").eq("status", "active").order("name");
+      const { data } = await supabase.from("students").select("*").eq("academic_year", year).eq("status", "active").order("name");
       return data || [];
     },
   });
@@ -42,14 +44,13 @@ function AttendancePage() {
     },
   });
 
-  // Monthly attendance data
   const monthStart = format(startOfMonth(new Date(date)), "yyyy-MM-dd");
   const monthEnd = format(endOfMonth(new Date(date)), "yyyy-MM-dd");
 
   const { data: monthlyAttendance = [] } = useQuery({
-    queryKey: ["attendance-monthly", monthStart],
+    queryKey: ["attendance-monthly", monthStart, year],
     queryFn: async () => {
-      const { data } = await supabase.from("attendance").select("*").gte("date", monthStart).lte("date", monthEnd);
+      const { data } = await supabase.from("attendance").select("*").eq("academic_year", year).gte("date", monthStart).lte("date", monthEnd);
       return data || [];
     },
   });
@@ -89,8 +90,8 @@ function AttendancePage() {
         student_id: s.id,
         date,
         status: getStatus(s.id),
+        academic_year: year,
       }));
-      
       for (const record of records) {
         const { error } = await supabase.from("attendance").upsert(record, { onConflict: "student_id,date" });
         if (error) throw error;
@@ -106,8 +107,6 @@ function AttendancePage() {
   });
 
   const presentCount = filtered.filter((s) => getStatus(s.id) === "present").length;
-
-  // Monthly stats
   const totalMonthDays = new Set(monthlyAttendance.map((a) => a.date)).size;
   const monthlyPresentCount = monthlyAttendance.filter((a) => a.status === "present").length;
   const monthlyTotalRecords = monthlyAttendance.length;
@@ -117,16 +116,15 @@ function AttendancePage() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold font-display">Attendance</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold font-display">Attendance</h1>
+            <Badge variant="outline" className="text-xs">AY {year}</Badge>
+          </div>
           <p className="text-xs text-muted-foreground mt-0.5">
             Monthly: <span className="font-semibold text-foreground">{monthlyPercentage}%</span> ({monthlyPresentCount}/{monthlyTotalRecords} records across {totalMonthDays} days)
           </p>
         </div>
-        <Button 
-          onClick={() => saveMutation.mutate()} 
-          disabled={saveMutation.isPending}
-          className="bg-secondary text-secondary-foreground hover:bg-secondary/90 font-bold"
-        >
+        <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} className="bg-secondary text-secondary-foreground hover:bg-secondary/90 font-bold">
           {saveMutation.isPending ? "Saving..." : "Save Attendance"}
         </Button>
       </div>
@@ -176,13 +174,8 @@ function AttendancePage() {
                 <TableRow><TableCell colSpan={4} className="text-center py-10 text-muted-foreground">No students found</TableCell></TableRow>
               ) : (
                 filtered.map((s) => (
-                  <TableRow key={s.id} className="hover:bg-muted/50 transition-colors">
-                    <TableCell>
-                      <Checkbox
-                        checked={getStatus(s.id) === "present"}
-                        onCheckedChange={() => toggleAttendance(s.id)}
-                      />
-                    </TableCell>
+                  <TableRow key={s.id} className="hover:bg-muted/50">
+                    <TableCell><Checkbox checked={getStatus(s.id) === "present"} onCheckedChange={() => toggleAttendance(s.id)} /></TableCell>
                     <TableCell className="font-medium">{s.name}</TableCell>
                     <TableCell>{s.class}</TableCell>
                     <TableCell>{s.batch}</TableCell>

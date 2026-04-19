@@ -14,8 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          created_at: string
+          id: string
+          key: string
+          value: Json
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          key: string
+          value?: Json
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          key?: string
+          value?: Json
+        }
+        Relationships: []
+      }
       attendance: {
         Row: {
+          academic_year: string
           created_at: string
           date: string
           id: string
@@ -23,6 +45,7 @@ export type Database = {
           student_id: string
         }
         Insert: {
+          academic_year?: string
           created_at?: string
           date?: string
           id?: string
@@ -30,6 +53,7 @@ export type Database = {
           student_id: string
         }
         Update: {
+          academic_year?: string
           created_at?: string
           date?: string
           id?: string
@@ -48,6 +72,7 @@ export type Database = {
       }
       lectures: {
         Row: {
+          academic_year: string
           batch: string
           created_at: string
           date: string
@@ -56,6 +81,7 @@ export type Database = {
           teacher_id: string
         }
         Insert: {
+          academic_year?: string
           batch?: string
           created_at?: string
           date?: string
@@ -64,6 +90,7 @@ export type Database = {
           teacher_id: string
         }
         Update: {
+          academic_year?: string
           batch?: string
           created_at?: string
           date?: string
@@ -83,6 +110,7 @@ export type Database = {
       }
       payments: {
         Row: {
+          academic_year: string
           amount: number
           created_at: string
           id: string
@@ -92,6 +120,7 @@ export type Database = {
           student_id: string
         }
         Insert: {
+          academic_year?: string
           amount: number
           created_at?: string
           id?: string
@@ -101,6 +130,7 @@ export type Database = {
           student_id: string
         }
         Update: {
+          academic_year?: string
           amount?: number
           created_at?: string
           id?: string
@@ -121,6 +151,7 @@ export type Database = {
       }
       students: {
         Row: {
+          academic_year: string
           admission_date: string
           batch: string
           class: string
@@ -137,6 +168,7 @@ export type Database = {
           total_fees: number
         }
         Insert: {
+          academic_year?: string
           admission_date?: string
           batch?: string
           class: string
@@ -153,6 +185,7 @@ export type Database = {
           total_fees?: number
         }
         Update: {
+          academic_year?: string
           admission_date?: string
           batch?: string
           class?: string
@@ -170,27 +203,117 @@ export type Database = {
         }
         Relationships: []
       }
+      teacher_attendance: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          status: string
+          teacher_id: string
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          id?: string
+          status?: string
+          teacher_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          status?: string
+          teacher_id?: string
+        }
+        Relationships: []
+      }
       teachers: {
         Row: {
           created_at: string
+          fixed_salary: number
           id: string
           name: string
+          payment_type: string
           per_lecture_fee: number
           subject: string
         }
         Insert: {
           created_at?: string
+          fixed_salary?: number
           id?: string
           name: string
+          payment_type?: string
           per_lecture_fee?: number
           subject: string
         }
         Update: {
           created_at?: string
+          fixed_salary?: number
           id?: string
           name?: string
+          payment_type?: string
           per_lecture_fee?: number
           subject?: string
+        }
+        Relationships: []
+      }
+      test_results: {
+        Row: {
+          created_at: string
+          id: string
+          marks_obtained: number
+          remarks: string | null
+          student_id: string
+          test_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          marks_obtained?: number
+          remarks?: string | null
+          student_id: string
+          test_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          marks_obtained?: number
+          remarks?: string | null
+          student_id?: string
+          test_id?: string
+        }
+        Relationships: []
+      }
+      tests: {
+        Row: {
+          academic_year: string
+          created_at: string
+          id: string
+          max_marks: number
+          name: string
+          standard: string
+          subject: string
+          test_date: string
+        }
+        Insert: {
+          academic_year?: string
+          created_at?: string
+          id?: string
+          max_marks?: number
+          name: string
+          standard: string
+          subject: string
+          test_date?: string
+        }
+        Update: {
+          academic_year?: string
+          created_at?: string
+          id?: string
+          max_marks?: number
+          name?: string
+          standard?: string
+          subject?: string
+          test_date?: string
         }
         Relationships: []
       }
