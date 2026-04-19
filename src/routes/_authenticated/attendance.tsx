@@ -86,22 +86,34 @@ function AttendancePage() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const records = filtered.map((s) => ({
-        student_id: s.id,
-        date,
-        status: getStatus(s.id),
-        academic_year: year,
-      }));
+      // Only persist records the user actually toggled — never silently overwrite untouched students
+      const changedIds = Object.keys(attendance);
+      if (changedIds.length === 0) return 0;
+      const records = changedIds
+        .filter((id) => filtered.some((s) => s.id === id))
+        .map((id) => ({
+          student_id: id,
+          date,
+          status: attendance[id],
+          academic_year: year,
+        }));
       for (const record of records) {
         const { error } = await supabase.from("attendance").upsert(record, { onConflict: "student_id,date" });
         if (error) throw error;
       }
+      return records.length;
     },
-    onSuccess: () => {
-      toast.success("Attendance saved");
+    onSuccess: (count) => {
+      if (count === 0) {
+        toast.info("No changes to save");
+        return;
+      }
+      toast.success(`Attendance saved (${count} ${count === 1 ? "student" : "students"})`);
       setAttendance({});
       queryClient.invalidateQueries({ queryKey: ["attendance"] });
       queryClient.invalidateQueries({ queryKey: ["attendance-monthly"] });
+      queryClient.invalidateQueries({ queryKey: ["attendance-today"] });
+      queryClient.invalidateQueries({ queryKey: ["attendance-all"] });
     },
     onError: (e) => toast.error(e.message),
   });
