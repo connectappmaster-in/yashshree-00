@@ -64,14 +64,17 @@ function DashboardPage() {
   });
 
   const totalStudents = students?.length || 0;
-  const totalCollected = payments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
-  const totalFees = students?.reduce((sum, s) => sum + Number(s.total_fees) - Number(s.discount), 0) || 0;
-  const pendingFees = totalFees - totalCollected;
+  const totalCollected = ayPayments?.reduce((sum, p) => sum + safeNum(p.amount), 0) || 0;
+  const totalFees = students?.reduce((sum, s) => sum + safeNum(s.total_fees) - safeNum(s.discount), 0) || 0;
+  // Pending = AY total fees − payments made by these AY students (any year)
+  const studentIds = new Set((students || []).map((s) => s.id));
+  const collectedAgainstAY = (payments || []).filter((p) => studentIds.has(p.student_id)).reduce((sum, p) => sum + safeNum(p.amount), 0);
+  const pendingFees = totalFees - collectedAgainstAY;
   const todayPresent = todayAttendance?.length || 0;
 
   const studentPending = (students || []).map((s) => {
-    const paid = (payments || []).filter((p) => p.student_id === s.id).reduce((sum, p) => sum + Number(p.amount), 0);
-    const total = Number(s.total_fees) - Number(s.discount);
+    const paid = (payments || []).filter((p) => p.student_id === s.id).reduce((sum, p) => sum + safeNum(p.amount), 0);
+    const total = safeNum(s.total_fees) - safeNum(s.discount);
     return { ...s, paid, total, remaining: total - paid };
   }).filter((s) => s.remaining > 0).sort((a, b) => b.remaining - a.remaining).slice(0, 10);
 
@@ -79,18 +82,20 @@ function DashboardPage() {
     const date = subMonths(new Date(), 5 - i);
     const start = format(startOfMonth(date), "yyyy-MM-dd");
     const end = format(endOfMonth(date), "yyyy-MM-dd");
-    const monthPayments = payments?.filter(
+    const monthPayments = ayPayments?.filter(
       (p) => p.payment_date >= start && p.payment_date <= end
     ) || [];
     return {
       month: format(date, "MMM"),
-      revenue: monthPayments.reduce((sum, p) => sum + Number(p.amount), 0),
+      revenue: monthPayments.reduce((sum, p) => sum + safeNum(p.amount), 0),
     };
   });
 
   const sendReminder = async (student: typeof studentPending[0]) => {
-    const msg = `Hello ${student.name}, your pending fees for Yashshree Classes is ₹${student.remaining.toLocaleString("en-IN")}. Please pay before ${student.fee_due_day}th of this month. Thank you.`;
-    window.open(`https://wa.me/91${student.mobile}?text=${encodeURIComponent(msg)}`, "_blank");
+    const msg = `Hello ${student.name}, your pending fees for Yashshree Classes is ₹${student.remaining.toLocaleString("en-IN")}. Please pay before ${nextDueLabel(student.fee_due_day)}. Thank you.`;
+    const url = buildWhatsappUrl(student.mobile, msg);
+    if (!url) { toast.error(`Invalid mobile for ${student.name}`); return; }
+    window.open(url, "_blank");
     await supabase.from("whatsapp_logs").insert({ student_id: student.id, message: msg, type: "reminder" });
   };
 
