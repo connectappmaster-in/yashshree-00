@@ -310,8 +310,10 @@ function StudentsPage() {
                       <PaymentForm
                         studentId={selected.id}
                         defaultYear={year}
+                        remaining={selected.remaining}
                         onSuccess={() => {
                           setPaymentDialogOpen(false);
+                          queryClient.invalidateQueries({ queryKey: ["payments-all"] });
                           queryClient.invalidateQueries({ queryKey: ["payments"] });
                         }}
                       />
@@ -326,7 +328,7 @@ function StudentsPage() {
                         {selected.studentPayments.map((p) => (
                           <div key={p.id} className="flex items-center justify-between bg-muted/30 rounded p-2 text-sm">
                             <div>
-                              <p className="font-bold">₹{Number(p.amount).toLocaleString("en-IN")}</p>
+                              <p className="font-bold">₹{safeNum(p.amount).toLocaleString("en-IN")}</p>
                               <p className="text-xs text-muted-foreground">{format(new Date(p.payment_date), "dd MMM yyyy")} • {p.payment_mode}</p>
                               {p.notes && <p className="text-xs italic text-muted-foreground">{p.notes}</p>}
                             </div>
@@ -564,7 +566,7 @@ function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"stu
   );
 }
 
-function PaymentForm({ studentId, defaultYear, onSuccess }: { studentId: string; defaultYear: string; onSuccess: () => void }) {
+function PaymentForm({ studentId, defaultYear, remaining, onSuccess }: { studentId: string; defaultYear: string; remaining: number; onSuccess: () => void }) {
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [mode, setMode] = useState("cash");
@@ -572,10 +574,12 @@ function PaymentForm({ studentId, defaultYear, onSuccess }: { studentId: string;
 
   const mutation = useMutation({
     mutationFn: async () => {
+      const amt = safeNum(amount);
+      if (amt <= 0) throw new Error("Amount must be greater than 0");
       const ay = deriveAcademicYear(date) || defaultYear;
       const { error } = await supabase.from("payments").insert({
         student_id: studentId,
-        amount: Number(amount),
+        amount: amt,
         payment_date: date,
         payment_mode: mode,
         notes: notes || null,
@@ -587,9 +591,23 @@ function PaymentForm({ studentId, defaultYear, onSuccess }: { studentId: string;
     onError: (e) => toast.error(e.message),
   });
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = safeNum(amount);
+    if (amt <= 0) { toast.error("Enter a valid amount"); return; }
+    if (remaining > 0 && amt > remaining) {
+      if (!window.confirm(`Amount ₹${amt.toLocaleString("en-IN")} is more than remaining ₹${remaining.toLocaleString("en-IN")}. Proceed anyway?`)) return;
+    }
+    mutation.mutate();
+  };
+
   return (
-    <form onSubmit={(e) => { e.preventDefault(); mutation.mutate(); }} className="space-y-3">
-      <div className="space-y-1.5"><Label>Amount (₹)</Label><Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required min={1} /></div>
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <div className="space-y-1.5">
+        <Label>Amount (₹)</Label>
+        <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required min={1} step="0.01" />
+        {remaining > 0 && <p className="text-xs text-muted-foreground">Remaining: ₹{remaining.toLocaleString("en-IN")}</p>}
+      </div>
       <div className="space-y-1.5"><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
       <div className="space-y-1.5">
         <Label>Payment Mode</Label>
