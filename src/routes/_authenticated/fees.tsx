@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Search, MessageCircle, IndianRupee, Send } from "lucide-react";
 import { format } from "date-fns";
 import { useAcademicYear, deriveAcademicYear } from "@/lib/academic-year-context";
+import { safeNum, buildWhatsappUrl, nextDueLabel } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/fees")({
   component: FeesPage,
@@ -39,7 +40,17 @@ function FeesPage() {
     },
   });
 
+  // All payments (across years) so a student who paid earlier still shows correct remaining
   const { data: payments = [] } = useQuery({
+    queryKey: ["payments-all"],
+    queryFn: async () => {
+      const { data } = await supabase.from("payments").select("*");
+      return data || [];
+    },
+  });
+
+  // AY-only payments for the "Collected this year" total card
+  const { data: ayPayments = [] } = useQuery({
     queryKey: ["payments", year],
     queryFn: async () => {
       const { data } = await supabase.from("payments").select("*").eq("academic_year", year);
@@ -49,8 +60,8 @@ function FeesPage() {
 
   const studentFees = students.map((s) => {
     const sp = payments.filter((p) => p.student_id === s.id);
-    const paid = sp.reduce((sum, p) => sum + Number(p.amount), 0);
-    const total = Number(s.total_fees) - Number(s.discount);
+    const paid = sp.reduce((sum, p) => sum + safeNum(p.amount), 0);
+    const total = safeNum(s.total_fees) - safeNum(s.discount);
     return { ...s, paid, total, remaining: total - paid };
   });
 
@@ -62,30 +73,35 @@ function FeesPage() {
   }).sort((a, b) => b.remaining - a.remaining);
 
   const totalPending = filtered.reduce((sum, s) => sum + Math.max(0, s.remaining), 0);
-  const totalCollected = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+  const totalCollected = ayPayments.reduce((sum, p) => sum + safeNum(p.amount), 0);
 
   const sendReminder = async (s: typeof studentFees[0]) => {
-    const msg = `Hello ${s.name}, your pending fees for Yashshree Classes is ₹${s.remaining.toLocaleString("en-IN")}. Please pay before ${s.fee_due_day}th of this month. Thank you.`;
-    window.open(`https://wa.me/91${s.mobile}?text=${encodeURIComponent(msg)}`, "_blank");
+    const msg = `Hello ${s.name}, your pending fees for Yashshree Classes is ₹${s.remaining.toLocaleString("en-IN")}. Please pay before ${nextDueLabel(s.fee_due_day)}. Thank you.`;
+    const url = buildWhatsappUrl(s.mobile, msg);
+    if (!url) { toast.error(`Invalid mobile for ${s.name}`); return; }
+    window.open(url, "_blank");
     await supabase.from("whatsapp_logs").insert({ student_id: s.id, message: msg, type: "reminder" });
     toast.success(`Reminder sent to ${s.name}`);
   };
 
+  // Bulk: log every reminder, open one tab at a time with a 600ms delay so the browser doesn't block popups.
   const sendBulk = async () => {
-    const pending = filtered.filter((s) => s.remaining > 0);
-    if (pending.length === 0) { toast.info("No pending fees"); return; }
+    const pending = filtered.filter((s) => s.remaining > 0 && buildWhatsappUrl(s.mobile, "x"));
+    if (pending.length === 0) { toast.info("No pending fees with valid mobiles"); return; }
     const confirmed = window.confirm(
-      `WhatsApp Web only opens one chat at a time. This will log reminders for ${pending.length} students and open the first chat. Continue?`
+      `This will log ${pending.length} WhatsApp reminders and open ${pending.length} tabs (one per student). Your browser may block tabs after the first — allow popups for this site. Continue?`
     );
     if (!confirmed) return;
+    let idx = 0;
     for (const s of pending) {
-      const msg = `Hello ${s.name}, your pending fees for Yashshree Classes is ₹${s.remaining.toLocaleString("en-IN")}. Please pay before ${s.fee_due_day}th of this month. Thank you.`;
+      const msg = `Hello ${s.name}, your pending fees for Yashshree Classes is ₹${s.remaining.toLocaleString("en-IN")}. Please pay before ${nextDueLabel(s.fee_due_day)}. Thank you.`;
+      const url = buildWhatsappUrl(s.mobile, msg)!;
+      // Stagger opens so popup blocker is friendlier
+      setTimeout(() => window.open(url, "_blank"), idx * 600);
       await supabase.from("whatsapp_logs").insert({ student_id: s.id, message: msg, type: "reminder" });
+      idx++;
     }
-    const first = pending[0];
-    const firstMsg = `Hello ${first.name}, your pending fees for Yashshree Classes is ₹${first.remaining.toLocaleString("en-IN")}. Please pay before ${first.fee_due_day}th of this month. Thank you.`;
-    window.open(`https://wa.me/91${first.mobile}?text=${encodeURIComponent(firstMsg)}`, "_blank");
-    toast.success(`${pending.length} reminders logged. Open each student individually to send the rest.`);
+    toast.success(`${pending.length} reminders queued.`);
   };
 
   const openPayment = (id: string) => { setPaymentStudentId(id); setPaymentDialogOpen(true); };
@@ -189,10 +205,13 @@ function FeesPage() {
           {paymentStudentId && (
             <PaymentForm
               studentId={paymentStudentId}
+              studentName={studentFees.find((s) => s.id === paymentStudentId)?.name || ""}
+              remaining={studentFees.find((s) => s.id === paymentStudentId)?.remaining || 0}
               defaultYear={year}
               onSuccess={() => {
                 setPaymentDialogOpen(false);
                 queryClient.invalidateQueries({ queryKey: ["payments"] });
+                queryClient.invalidateQueries({ queryKey: ["payments-all"] });
               }}
             />
           )}
@@ -202,7 +221,7 @@ function FeesPage() {
   );
 }
 
-function PaymentForm({ studentId, defaultYear, onSuccess }: { studentId: string; defaultYear: string; onSuccess: () => void }) {
+function PaymentForm({ studentId, studentName, remaining, defaultYear, onSuccess }: { studentId: string; studentName: string; remaining: number; defaultYear: string; onSuccess: () => void }) {
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [mode, setMode] = useState("cash");
@@ -210,24 +229,59 @@ function PaymentForm({ studentId, defaultYear, onSuccess }: { studentId: string;
 
   const mutation = useMutation({
     mutationFn: async () => {
+      const amt = safeNum(amount);
+      if (amt <= 0) throw new Error("Amount must be greater than 0");
+      if (remaining > 0 && amt > remaining) {
+        const ok = window.confirm(`Amount ₹${amt.toLocaleString("en-IN")} exceeds remaining ₹${remaining.toLocaleString("en-IN")}. Record anyway?`);
+        if (!ok) throw new Error("Cancelled");
+      }
       const ay = deriveAcademicYear(date) || defaultYear;
       const { error } = await supabase.from("payments").insert({
         student_id: studentId,
-        amount: Number(amount),
+        amount: amt,
         payment_date: date,
         payment_mode: mode,
         notes: notes || null,
         academic_year: ay,
       });
       if (error) throw error;
+      return { amt, date, mode, notes };
     },
     onSuccess: () => { toast.success("Payment recorded"); onSuccess(); },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => { if (e.message !== "Cancelled") toast.error(e.message); },
   });
+
+  const printReceipt = () => {
+    const win = window.open("", "_blank", "width=400,height=600");
+    if (!win) return;
+    const amt = safeNum(amount);
+    win.document.write(`
+      <html><head><title>Receipt - ${studentName}</title>
+      <style>body{font-family:system-ui;padding:24px;max-width:340px;margin:auto;color:#222}h1{margin:0 0 4px;font-size:18px}h2{font-size:14px;margin:0 0 16px;color:#666;font-weight:normal}table{width:100%;border-collapse:collapse;font-size:13px}td{padding:6px 0;border-bottom:1px dashed #ccc}.lbl{color:#666}.amt{font-size:22px;font-weight:bold;text-align:center;padding:16px;border:2px dashed #888;border-radius:8px;margin:12px 0}.foot{text-align:center;font-size:11px;color:#888;margin-top:24px}</style>
+      </head><body>
+      <h1>Yashshree Coaching Classes</h1>
+      <h2>Payment Receipt</h2>
+      <div class="amt">Rs. ${amt.toLocaleString("en-IN")}</div>
+      <table>
+        <tr><td class="lbl">Student</td><td style="text-align:right;font-weight:600">${studentName}</td></tr>
+        <tr><td class="lbl">Date</td><td style="text-align:right">${date}</td></tr>
+        <tr><td class="lbl">Mode</td><td style="text-align:right;text-transform:capitalize">${mode}</td></tr>
+        ${notes ? `<tr><td class="lbl">Notes</td><td style="text-align:right">${notes}</td></tr>` : ""}
+        <tr><td class="lbl">Receipt #</td><td style="text-align:right">${Date.now().toString().slice(-8)}</td></tr>
+      </table>
+      <p class="foot">Thank you. This is a computer-generated receipt.</p>
+      <script>window.onload=()=>setTimeout(()=>window.print(),200)</script>
+      </body></html>
+    `);
+    win.document.close();
+  };
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); mutation.mutate(); }} className="space-y-3">
-      <div className="space-y-1.5"><Label>Amount (₹)</Label><Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required min={1} /></div>
+      {remaining > 0 && (
+        <p className="text-xs text-muted-foreground">Remaining: <span className="font-semibold text-destructive">₹{remaining.toLocaleString("en-IN")}</span></p>
+      )}
+      <div className="space-y-1.5"><Label>Amount (₹)</Label><Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required min={1} step="0.01" /></div>
       <div className="space-y-1.5"><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
       <div className="space-y-1.5">
         <Label>Mode</Label>
@@ -241,9 +295,12 @@ function PaymentForm({ studentId, defaultYear, onSuccess }: { studentId: string;
         </Select>
       </div>
       <div className="space-y-1.5"><Label>Notes</Label><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
-      <Button type="submit" className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90" disabled={mutation.isPending}>
-        {mutation.isPending ? "Saving..." : "Record Payment"}
-      </Button>
+      <div className="flex gap-2">
+        <Button type="submit" className="flex-1 bg-secondary text-secondary-foreground hover:bg-secondary/90" disabled={mutation.isPending}>
+          {mutation.isPending ? "Saving..." : "Record Payment"}
+        </Button>
+        <Button type="button" variant="outline" onClick={printReceipt} disabled={!amount}>Print</Button>
+      </div>
     </form>
   );
 }

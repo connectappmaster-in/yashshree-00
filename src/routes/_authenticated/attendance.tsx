@@ -166,7 +166,10 @@ function AttendancePage() {
               <Button variant="outline" size="sm" className="text-xs" onClick={selectAll}>All Present</Button>
               <Button variant="outline" size="sm" className="text-xs" onClick={deselectAll}>All Absent</Button>
             </div>
-            <div className="text-sm text-muted-foreground ml-auto">
+            <div className="text-sm text-muted-foreground ml-auto flex items-center gap-2">
+              {Object.keys(attendance).length > 0 && (
+                <Badge variant="outline" className="text-xs border-warning text-warning-foreground bg-warning/10">Unsaved changes</Badge>
+              )}
               Present: <Badge variant={presentCount > 0 ? "default" : "secondary"} className="ml-1">{presentCount}/{filtered.length}</Badge>
             </div>
           </div>

@@ -11,6 +11,9 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { useAuth } from "@/lib/auth-context";
 import { useAcademicYear } from "@/lib/academic-year-context";
+import { safeNum, buildWhatsappUrl, nextDueLabel } from "@/lib/format";
+import { CardsSkeleton } from "@/components/ui/loading-skeleton";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
@@ -20,7 +23,7 @@ function DashboardPage() {
   const { user } = useAuth();
   const { year } = useAcademicYear();
   const [showCollected, setShowCollected] = useState(false);
-  const { data: students } = useQuery({
+  const { data: students, isLoading: studentsLoading } = useQuery({
     queryKey: ["students", year],
     queryFn: async () => {
       const { data } = await supabase.from("students").select("*").eq("academic_year", year).eq("status", "active");
@@ -28,7 +31,17 @@ function DashboardPage() {
     },
   });
 
+  // Pull ALL payments for active students (across years) so pending isn't inflated when AY changes.
   const { data: payments } = useQuery({
+    queryKey: ["payments-all"],
+    queryFn: async () => {
+      const { data } = await supabase.from("payments").select("*");
+      return data || [];
+    },
+  });
+
+  // For chart + collected stat — restrict to current AY
+  const { data: ayPayments } = useQuery({
     queryKey: ["payments", year],
     queryFn: async () => {
       const { data } = await supabase.from("payments").select("*").eq("academic_year", year);
@@ -51,14 +64,17 @@ function DashboardPage() {
   });
 
   const totalStudents = students?.length || 0;
-  const totalCollected = payments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
-  const totalFees = students?.reduce((sum, s) => sum + Number(s.total_fees) - Number(s.discount), 0) || 0;
-  const pendingFees = totalFees - totalCollected;
+  const totalCollected = ayPayments?.reduce((sum, p) => sum + safeNum(p.amount), 0) || 0;
+  const totalFees = students?.reduce((sum, s) => sum + safeNum(s.total_fees) - safeNum(s.discount), 0) || 0;
+  // Pending = AY total fees − payments made by these AY students (any year)
+  const studentIds = new Set((students || []).map((s) => s.id));
+  const collectedAgainstAY = (payments || []).filter((p) => studentIds.has(p.student_id)).reduce((sum, p) => sum + safeNum(p.amount), 0);
+  const pendingFees = totalFees - collectedAgainstAY;
   const todayPresent = todayAttendance?.length || 0;
 
   const studentPending = (students || []).map((s) => {
-    const paid = (payments || []).filter((p) => p.student_id === s.id).reduce((sum, p) => sum + Number(p.amount), 0);
-    const total = Number(s.total_fees) - Number(s.discount);
+    const paid = (payments || []).filter((p) => p.student_id === s.id).reduce((sum, p) => sum + safeNum(p.amount), 0);
+    const total = safeNum(s.total_fees) - safeNum(s.discount);
     return { ...s, paid, total, remaining: total - paid };
   }).filter((s) => s.remaining > 0).sort((a, b) => b.remaining - a.remaining).slice(0, 10);
 
@@ -66,18 +82,20 @@ function DashboardPage() {
     const date = subMonths(new Date(), 5 - i);
     const start = format(startOfMonth(date), "yyyy-MM-dd");
     const end = format(endOfMonth(date), "yyyy-MM-dd");
-    const monthPayments = payments?.filter(
+    const monthPayments = ayPayments?.filter(
       (p) => p.payment_date >= start && p.payment_date <= end
     ) || [];
     return {
       month: format(date, "MMM"),
-      revenue: monthPayments.reduce((sum, p) => sum + Number(p.amount), 0),
+      revenue: monthPayments.reduce((sum, p) => sum + safeNum(p.amount), 0),
     };
   });
 
   const sendReminder = async (student: typeof studentPending[0]) => {
-    const msg = `Hello ${student.name}, your pending fees for Yashshree Classes is ₹${student.remaining.toLocaleString("en-IN")}. Please pay before ${student.fee_due_day}th of this month. Thank you.`;
-    window.open(`https://wa.me/91${student.mobile}?text=${encodeURIComponent(msg)}`, "_blank");
+    const msg = `Hello ${student.name}, your pending fees for Yashshree Classes is ₹${student.remaining.toLocaleString("en-IN")}. Please pay before ${nextDueLabel(student.fee_due_day)}. Thank you.`;
+    const url = buildWhatsappUrl(student.mobile, msg);
+    if (!url) { toast.error(`Invalid mobile for ${student.name}`); return; }
+    window.open(url, "_blank");
     await supabase.from("whatsapp_logs").insert({ student_id: student.id, message: msg, type: "reminder" });
   };
 
@@ -93,14 +111,20 @@ function DashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Total Students" value={totalStudents} icon={Users} gradient="from-primary/10 to-primary/5" iconBg="bg-primary/15" iconColor="text-primary" />
-        <StatCard title="Fees Collected" value={showCollected ? `₹${totalCollected.toLocaleString("en-IN")}` : "₹ • • • • •"} icon={IndianRupee} gradient="from-success/10 to-success/5" iconBg="bg-success/15" iconColor="text-success" action={
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowCollected((v) => !v)} title={showCollected ? "Hide amount" : "Show amount"}>
-            {showCollected ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-          </Button>
-        } />
-        <StatCard title="Pending Fees" value={`₹${Math.max(0, pendingFees).toLocaleString("en-IN")}`} icon={AlertTriangle} gradient="from-destructive/10 to-destructive/5" iconBg="bg-destructive/15" iconColor="text-destructive" />
-        <StatCard title="Present Today" value={todayPresent} icon={CalendarCheck} gradient="from-accent/10 to-accent/5" iconBg="bg-accent/15" iconColor="text-accent" />
+        {studentsLoading ? (
+          <CardsSkeleton count={4} />
+        ) : (
+          <>
+            <StatCard title="Total Students" value={totalStudents} icon={Users} gradient="from-primary/10 to-primary/5" iconBg="bg-primary/15" iconColor="text-primary" />
+            <StatCard title="Fees Collected" value={showCollected ? `₹${totalCollected.toLocaleString("en-IN")}` : "₹ • • • • •"} icon={IndianRupee} gradient="from-success/10 to-success/5" iconBg="bg-success/15" iconColor="text-success" action={
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowCollected((v) => !v)} title={showCollected ? "Hide amount" : "Show amount"}>
+                {showCollected ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </Button>
+            } />
+            <StatCard title="Pending Fees" value={`₹${Math.max(0, pendingFees).toLocaleString("en-IN")}`} icon={AlertTriangle} gradient="from-destructive/10 to-destructive/5" iconBg="bg-destructive/15" iconColor="text-destructive" />
+            <StatCard title="Present Today" value={todayPresent} icon={CalendarCheck} gradient="from-accent/10 to-accent/5" iconBg="bg-accent/15" iconColor="text-accent" />
+          </>
+        )}
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">

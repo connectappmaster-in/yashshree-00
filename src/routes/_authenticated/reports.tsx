@@ -16,6 +16,7 @@ import { Download, FileSpreadsheet, FileText, Send, MessageCircle } from "lucide
 import { format, startOfMonth, endOfMonth, subDays, subMonths, subYears } from "date-fns";
 import { useAcademicYear } from "@/lib/academic-year-context";
 import { exportCSV, exportExcel, exportPDF } from "@/lib/export-utils";
+import { safeNum, buildWhatsappUrl } from "@/lib/format";
 
 export const Route = createFileRoute("/_authenticated/reports")({
   component: ReportsPage,
@@ -61,29 +62,41 @@ function ReportsPage() {
     queryFn: async () => (await supabase.from("attendance").select("*").eq("academic_year", year)).data || [],
   });
 
+  const { data: teacherAtt = [] } = useQuery({
+    queryKey: ["teacher-attendance", reportMonth, year],
+    queryFn: async () => (await supabase.from("teacher_attendance").select("*").eq("academic_year", year).gte("date", monthStart).lte("date", monthEnd)).data || [],
+  });
+
   const filteredStudents = students.filter((s) => {
     const mc = filterClass === "all" || s.class === filterClass;
     const mm = filterMedium === "all" || s.medium === filterMedium;
     return mc && mm;
   });
 
-  // Pending fees
+  // Pending fees — uses ALL payments to avoid AY-mismatch inflation
+  const { data: allPayments = [] } = useQuery({
+    queryKey: ["payments-all"],
+    queryFn: async () => (await supabase.from("payments").select("*")).data || [],
+  });
   const pendingData = students.filter((s) => s.status === "active").map((s) => {
-    const paid = payments.filter((p) => p.student_id === s.id).reduce((sum, p) => sum + Number(p.amount), 0);
-    const total = Number(s.total_fees) - Number(s.discount);
+    const paid = allPayments.filter((p) => p.student_id === s.id).reduce((sum, p) => sum + safeNum(p.amount), 0);
+    const total = safeNum(s.total_fees) - safeNum(s.discount);
     return { ...s, paid, total, remaining: total - paid };
   }).filter((s) => s.remaining > 0).sort((a, b) => b.remaining - a.remaining);
   const totalPendingAmount = pendingData.reduce((sum, s) => sum + s.remaining, 0);
 
-  // Monthly collection
+  // Monthly collection (this month payments only)
   const monthPayments = payments.filter((p) => p.payment_date >= monthStart && p.payment_date <= monthEnd);
-  const monthTotal = monthPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+  const monthTotal = monthPayments.reduce((sum, p) => sum + safeNum(p.amount), 0);
 
-  // Salary
+  // Salary — fixed teachers only count for the month if they were marked present at least once
   const teacherSalaryData = teachers.map((t) => {
     const count = lectures.filter((l) => l.teacher_id === t.id).length;
-    const salary = t.payment_type === "fixed" ? Number(t.fixed_salary) : count * Number(t.per_lecture_fee);
-    return { ...t, count, salary };
+    const presentDays = teacherAtt.filter((a) => a.teacher_id === t.id && a.status === "present").length;
+    const salary = t.payment_type === "fixed"
+      ? (presentDays > 0 ? safeNum(t.fixed_salary) : 0)
+      : count * safeNum(t.per_lecture_fee);
+    return { ...t, count, presentDays, salary };
   });
   const totalSalary = teacherSalaryData.reduce((sum, t) => sum + t.salary, 0);
 
@@ -127,17 +140,31 @@ function ReportsPage() {
     const total = recs.length;
     const pct = total > 0 ? Math.round((present / total) * 100) : 0;
     const msg = `Yashshree Classes — ${waFreq} Attendance Report for ${waStudent.name}: ${present}/${total} days present (${pct}%). Period: last ${days} days.`;
-    window.open(`https://wa.me/91${waStudent.mobile}?text=${encodeURIComponent(msg)}`, "_blank");
+    const url = buildWhatsappUrl(waStudent.mobile, msg);
+    if (!url) { toast.error("Invalid mobile number"); return; }
+    window.open(url, "_blank");
     await supabase.from("whatsapp_logs").insert({ student_id: waStudent.id, message: msg, type: "attendance" });
     toast.success("Report sent");
     setWaDialogOpen(false);
   };
 
+  const setMonthPreset = (offset: number) => {
+    const d = subMonths(new Date(), offset);
+    setReportMonth(format(d, "yyyy-MM"));
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center gap-2">
-        <h1 className="text-2xl font-bold font-display">Reports</h1>
-        <Badge variant="outline" className="text-xs">AY {year}</Badge>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold font-display">Reports</h1>
+          <Badge variant="outline" className="text-xs">AY {year}</Badge>
+        </div>
+        <div className="flex gap-1 flex-wrap">
+          <Button variant="outline" size="sm" onClick={() => setMonthPreset(0)}>This Month</Button>
+          <Button variant="outline" size="sm" onClick={() => setMonthPreset(1)}>Last Month</Button>
+          <Button variant="outline" size="sm" onClick={() => setMonthPreset(3)}>3 Months Ago</Button>
+        </div>
       </div>
 
       <Tabs defaultValue="students">
@@ -297,7 +324,9 @@ function ReportsPage() {
                   <TableHead>Name</TableHead><TableHead>Class</TableHead><TableHead className="text-right">Present</TableHead><TableHead className="text-right">Days</TableHead><TableHead className="text-right">%</TableHead><TableHead className="text-right">Send</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {attRows.map((r) => (
+                  {attRows.length === 0 ? (
+                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">No active students for this filter</TableCell></TableRow>
+                  ) : attRows.map((r) => (
                     <TableRow key={r.id} className="hover:bg-muted/50">
                       <TableCell className="font-medium">{r.name}</TableCell>
                       <TableCell>{r.class}</TableCell>

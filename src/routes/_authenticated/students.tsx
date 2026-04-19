@@ -265,10 +265,17 @@ function StudentsPage() {
                 </TabsList>
 
                 <TabsContent value="info" className="mt-3">
-                  <Card><CardContent className="p-4 space-y-2 text-sm">
+                  <Card><CardContent className="p-4 space-y-2 text-sm max-h-[60vh] overflow-y-auto">
                     <p><span className="text-muted-foreground">Subjects:</span> {selected.subjects.join(", ") || "—"}</p>
                     <p><span className="text-muted-foreground">Lecture Days:</span> {selected.lecture_days.join(", ") || "—"}</p>
-                    <p><span className="text-muted-foreground">Status:</span> <Badge variant={selected.status === "active" ? "default" : "secondary"}>{selected.status}</Badge></p>
+                    <p className="flex items-center gap-2"><span className="text-muted-foreground">Status:</span> <Badge variant={selected.status === "active" ? "default" : "secondary"}>{selected.status}</Badge>
+                      <Button size="sm" variant="outline" className="ml-auto h-7 text-xs" onClick={async () => {
+                        const next = selected.status === "active" ? "inactive" : "active";
+                        const { error } = await supabase.from("students").update({ status: next }).eq("id", selected.id);
+                        if (error) toast.error(error.message);
+                        else { toast.success(`Marked ${next}`); queryClient.invalidateQueries({ queryKey: ["students"] }); }
+                      }}>{selected.status === "active" ? "Mark inactive" : "Mark active"}</Button>
+                    </p>
                     <p><span className="text-muted-foreground">Academic Year:</span> {selected.academic_year}</p>
                   </CardContent></Card>
                 </TabsContent>
