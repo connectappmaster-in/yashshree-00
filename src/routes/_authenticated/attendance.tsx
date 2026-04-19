@@ -37,9 +37,9 @@ function AttendancePage() {
   });
 
   const { data: existingAttendance = [] } = useQuery({
-    queryKey: ["attendance", date],
+    queryKey: ["attendance", date, year],
     queryFn: async () => {
-      const { data } = await supabase.from("attendance").select("*").eq("date", date);
+      const { data } = await supabase.from("attendance").select("*").eq("date", date).eq("academic_year", year);
       return data || [];
     },
   });
