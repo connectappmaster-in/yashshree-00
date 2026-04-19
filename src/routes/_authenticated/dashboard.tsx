@@ -11,6 +11,9 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { useAuth } from "@/lib/auth-context";
 import { useAcademicYear } from "@/lib/academic-year-context";
+import { safeNum, buildWhatsappUrl, nextDueLabel } from "@/lib/format";
+import { CardsSkeleton } from "@/components/ui/loading-skeleton";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
@@ -20,7 +23,7 @@ function DashboardPage() {
   const { user } = useAuth();
   const { year } = useAcademicYear();
   const [showCollected, setShowCollected] = useState(false);
-  const { data: students } = useQuery({
+  const { data: students, isLoading: studentsLoading } = useQuery({
     queryKey: ["students", year],
     queryFn: async () => {
       const { data } = await supabase.from("students").select("*").eq("academic_year", year).eq("status", "active");
@@ -28,7 +31,17 @@ function DashboardPage() {
     },
   });
 
+  // Pull ALL payments for active students (across years) so pending isn't inflated when AY changes.
   const { data: payments } = useQuery({
+    queryKey: ["payments-all"],
+    queryFn: async () => {
+      const { data } = await supabase.from("payments").select("*");
+      return data || [];
+    },
+  });
+
+  // For chart + collected stat — restrict to current AY
+  const { data: ayPayments } = useQuery({
     queryKey: ["payments", year],
     queryFn: async () => {
       const { data } = await supabase.from("payments").select("*").eq("academic_year", year);
