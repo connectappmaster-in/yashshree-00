@@ -29,6 +29,7 @@ function ReportsPage() {
   const { year } = useAcademicYear();
   const [filterClass, setFilterClass] = useState("all");
   const [filterMedium, setFilterMedium] = useState("all");
+  const [attClass, setAttClass] = useState("all");
   const [reportMonth, setReportMonth] = useState(format(new Date(), "yyyy-MM"));
   const [waDialogOpen, setWaDialogOpen] = useState(false);
   const [waStudent, setWaStudent] = useState<{ id: string; name: string; mobile: string } | null>(null);
