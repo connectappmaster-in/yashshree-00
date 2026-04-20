@@ -1,138 +1,139 @@
 
 
-# Fresh Deep Audit — Yashshree Classes App (Round 2)
+# Deep Audit Round 3 — Yashshree Classes
 
-I re-audited every route, nav, context, and form. Most of the original 40 issues are fixed. Here are **new bugs and improvements still remaining**, grouped by severity.
-
----
-
-## 🔴 Critical bugs (data correctness)
-
-1. **Reports → Pending Fees ignores Academic Year.** `pendingData` filters `students.status === "active"` but doesn't filter by `s.academic_year === year`. Switching AY in the navbar has no effect on this tab — it shows pending across **all students of all years**, even though the AY badge says otherwise. Fix: `students.filter((s) => s.academic_year === year && s.status === "active")`.
-
-2. **`students.tsx` payments query uses AY filter, breaks remaining-fees math.** Line 60-66: `payments` is filtered `.eq("academic_year", year)` but `studentSummary.paid` sums only those payments. A student who paid in AY 2024-25 but is still active in 2025-26 will show **inflated remaining**. The Fees and Dashboard pages already use `payments-all` correctly — Students page is the outlier.
-
-3. **`students.tsx` PaymentForm (line 565-609) uses unsafe `Number(amount)`.** No `safeNum` guard, no `> 0` validation, no overpay confirmation. This is the second copy of `PaymentForm` (Fees page has the safe one). Two copies = bug surface — Students-page payments can record `NaN` or 0.
-
-4. **Attendance: existing-attendance query missing AY filter.** Line 39-45: `existingAttendance` for a date queries the table without `.eq("academic_year", year)`. If two students from different AYs share the same date, you see mixed records — and `getStatus` may pick the wrong one. Add AY filter.
-
-5. **Reports → Salary uses `presentDays > 0` for fixed teachers.** This means a teacher marked present for **even 1 day** gets full month salary, while one with 0 marked days gets ₹0. Industry expectation: fixed salary is just monthly (label clearly), or pro-rated by `present / workingDays`. Current logic is misleading either way — **show "Fixed (X/Y days present)"** label so admin understands.
-
-6. **Login page redirect race.** `useEffect` runs after render → if user is already logged in, the login UI flashes for ~100ms before redirect. Fix: use `beforeLoad` like the docs show, or render a blank shell until `isReady`.
-
-7. **`AcademicYearProvider` SSR mismatch risk on default value.** Default is hardcoded `"2025-26"` (line 14), but `ACADEMIC_YEARS[0]` is `"2026-27"`. The dropdown lists 2026-27 first but the initial state isn't it. New users in 2026-27 see wrong default until they change it.
+After thorough review, most prior issues are fixed. Here's what **still needs work**, grouped by severity. No code changes yet — approve and I'll implement.
 
 ---
 
-## 🟠 High-priority logic / UX issues
+## 🔴 Critical bugs (real impact)
 
-8. **Students page `studentSummary` uses `Number()` not `safeNum`.** Line 110-111: `Number(p.amount)` and `Number(s.total_fees)` silently produce NaN if the DB ever has empty values. Inconsistent with Fees page.
+1. **Reports → Students/Pending count mismatch.** `students` query has no `.eq("status", "active")`, so the **Students** tab shows inactive students mixed with active. But the **Pending Fees** tab filters `status === "active"`. Inconsistent — admin sees different totals on the same page.
 
-9. **`tests.tsx` `MarksEntryTable` "Save" silently caps marks at max** (line 207: `Math.min(max, ...)`) — no warning to admin. If they enter 110/100 by typo, it saves as 100 with no notice.
+2. **Reports → Salary tab counts lectures across all batches but not for inactive teachers.** No issue per se, but `workingDays` is global (any teacher present) so a teacher who joined mid-month gets `presentDays/workingDays` like `8/22` even if only 8 working days existed for them. Misleading.
 
-10. **`teachers.tsx` `LectureForm` (line 334+) has no validation** — empty subject silently passes `.trim()` then inserts. Also no warning if logging duplicate lectures (same teacher + date + subject).
+3. **Students.tsx form fallback `Number(form.total_fees)` (line 500).** Display-only, but if user types `abc`, "Final" shows `NaN`. Should use `safeNum`.
 
-11. **`reports.tsx` Collection tab — no "all months" or year-to-date option.** Only one month at a time. For year-end reporting, admin must screenshot 12 separate exports.
+4. **`MarksEntryTable` initial state stale across test switches.** When you switch from Test A to Test B, the local `marks` state from Test A persists (only cleared on save). Switching tests → entering marks → switching back can corrupt entries. Reset `marks` on `test.id` change via `useEffect`.
 
-12. **Reports → Attendance per-student uses `subDays`/`subMonths` from today** (line 130-137) but `attRows` uses `monthStart`/`monthEnd`. The on-screen table and the WhatsApp message report **different periods** for the same student.
+5. **Attendance "All Present/Absent" only fills currently-filtered students**, but if user changes filter after, the previous bulk values stay in pending state (now applied to wrong cohort). Minor but confusing.
 
-13. **Landing page (`/`) uses hash-anchor nav** (`#home`, `#courses`, `#contact`). The TanStack docs explicitly flag this as bad SEO/SSR. Each section deserves its own route or the metadata should reflect it's a single-page site.
+6. **WhatsApp Logs page is not AY-scoped.** Logs across all years show together — can grow unbounded. No date-default (last 30 days), no pagination. Will lag once 1000+ logs exist.
 
-14. **Index route renders during SSR but Header has `<Link to="/login">`** — works, but no route preloading hints. Minor.
+---
 
-15. **`whatsapp-logs` page has no SSR-safe `ssr: false`** like the rest of `_authenticated`. Inherits parent's `ssr: false`, OK — but `students(name, mobile)` join relies on FK that doesn't exist in schema (no FK between `whatsapp_logs.student_id` and `students.id` in the visible schema). Will silently return null for student name.
+## 🟠 High-priority logic / UX
 
-16. **No "All Present/All Absent" undo.** Once clicked, only Save Attendance writes — no way to revert without reloading the page.
+7. **Reports → Collection tab uses AY-filtered `payments` query**, but `monthPayments` filter restricts further by month. If a payment was logged with the wrong AY (cross-year), it won't appear. Should use `allPayments` and filter only by month.
 
-17. **Teachers page Lecture dialog** — `BATCHES` is defined but unused (line 26). `LectureForm` hardcodes `["Morning", "Evening"]` inline.
+8. **Reports `reportMonth` is shared across Collection / Attendance / Salary tabs** but the actual fetched `lectures`/`teacherAtt` queries depend on it. Switching the month picker on one tab silently re-renders others. OK behavior but no visual hint.
+
+9. **Reports `<input type="month">` (lines 268, 310, 357) is unstyled raw HTML** — inconsistent with shadcn UI used elsewhere.
+
+10. **Landing page (`/`) still uses hash-anchor nav** (`#home`, `#courses`, `#features`, `#contact`). Per TanStack docs this kills SEO/SSR. Each major section should be its own route OR explicitly accept hash-only nav.
+
+11. **`whatsapp-logs.tsx` `dateFrom` filter compares `log.sent_at < dateFrom`** as strings. `sent_at` is an ISO timestamp like `2025-04-20T10:30:00Z`, `dateFrom` is `2025-04-20`. String compare works because ISO sorts lexicographically — but **only if the user types YYYY-MM-DD**, which they do via the date input. OK but fragile; explicit Date conversion is safer.
+
+12. **AdminTopNav: nav items overflow horizontally on tablet (md, ~768-1024px)**. With 8 items + icons, they truncate or scroll. Mobile menu kicks in at `md:hidden` but **between 768-1024px the bar is cramped**.
+
+13. **No scroll-restoration on route change.** TanStack supports `scrollRestoration: true` in router config — not enabled. After scrolling far in Students list and clicking a student, then back, you lose position.
+
+14. **No route preloading.** `defaultPreload: "intent"` not set on router. Hovering a nav link doesn't prefetch.
+
+15. **Students table has no sortable columns.** Sorted only by name.
+
+16. **Tests page has no filter chip showing active filter** — just "No tests yet" if filter yields zero, but it's actually filtered, not empty.
 
 ---
 
 ## 🟡 Medium UX
 
-18. **No empty-state for filtered Students table** — shows "No students found" with no hint that filters are active.
+17. **No empty-state hints when filters are active** (Students, Fees, Tests, Attendance, Reports).
 
-19. **No keyboard shortcuts** anywhere — no `/` to focus search, no `Esc` to close dialogs (Radix handles Esc automatically actually, OK).
+18. **No duplicate-student check** (same name+mobile can be added twice silently).
 
-20. **No bulk operations for Students** — cannot deactivate multiple, cannot bulk export selected.
+19. **No favicon, no `<link rel="manifest">`, no theme-color meta.** Browser tab shows generic icon; mobile address bar not branded.
 
-21. **No date-range picker for Reports** — only month picker. Industry standard is from-to date range.
+20. **No global error boundary inside `_authenticated`.** Only router-level `defaultErrorComponent` (and even that is missing — `__root.tsx` has no `defaultErrorComponent`!). If a Supabase query throws inside a tab, the whole app crashes to a generic screen.
 
-22. **No "duplicate student" check** — same name + mobile can be added twice without warning.
+21. **No date-range picker on Reports** — only month-by-month. Year-end reporting needs from-to.
 
-23. **No print-friendly Student profile** — admin must screenshot.
+22. **Mobile nav (< sm)** hides "Yashshree Classes" brand text *and* the Year dropdown is only inside hamburger. The user clicked menu → sees year. But on mid-mobile (`sm` 640+), Year dropdown shows in topbar but hamburger menu also shows it = **duplicate dropdown** between 640-768px.
 
-24. **No favicon** — generic browser icon shows in tab.
+23. **No print-friendly Student profile / fee statement.**
 
-25. **No `<meta>` theme-color** — mobile address bar isn't branded.
+24. **No CSV import** for bulk student onboarding.
 
-26. **Mobile: top nav scrolls horizontally** but doesn't show scroll hint. Also the Year dropdown is hidden on `< sm` (`hidden sm:block`) but DOES appear in mobile menu — **inconsistent** between md and sm breakpoints.
+25. **`AcademicYearProvider` initial state mismatches `localStorage` after mount.** First render uses derived AY, then `useEffect` may swap to stored value → flash of wrong AY badge. Minor (SSR is off for `_authenticated`), but visible.
 
-27. **Dashboard "Top Pending" `sendReminder` doesn't toast on success** — only on error. User has no confirmation.
+26. **Reports Salary card shows `0/0 days` for fixed teachers when no attendance recorded** — confusing. Should hide or say "No attendance logged".
 
-28. **Reports page `sendWhatsapp` uses `subDays(7)` for "Weekly" but message says "last 7 days"** — calendar-week vs rolling-7-days ambiguity.
-
-29. **No global error boundary inside `_authenticated`** — only the router-level `defaultErrorComponent`. If Supabase query throws inside a tab, whole page crashes.
-
-30. **`tests.tsx` `deleteTestMut.onSuccess` invalidates `["test-results"]`** (broad key) — that key doesn't exist anymore (it's `["test-results", "by-test", id]`). This invalidation is a no-op; the only thing saving it is `setSelectedTestId(null)`.
+27. **`teachers.tsx` `BATCHES` constant unused** (line 26) — dead code, `LectureForm` hardcodes `["Morning", "Evening"]` inline.
 
 ---
 
-## 🟢 Polish / industry-standards
+## 🟢 Polish / industry-standards (defer-eligible)
 
-31. **No PWA manifest** — admin can't install to home screen.
-32. **No offline indicator** — silently fails on poor connectivity.
-33. **No CSV import for students / payments** — onboarding requires manual entry.
-34. **No audit trail** — who changed what, when (HIGH for fees).
-35. **No role separation** — anyone with login = full admin.
-36. **No 2FA / password reset flow visible** — defers to Supabase defaults.
-37. **No backup/restore export of full DB** for the admin.
-38. **No SMS fallback when WhatsApp fails** — single channel.
-39. **No analytics events** (page views, top actions) for product insight.
-40. **Reports `<input type="month">`** is unstyled raw input — inconsistent with shadcn Select/Input components used elsewhere.
+28. **No PWA manifest** for install-to-home-screen.
+29. **No offline indicator.**
+30. **No audit trail** (who changed what, when) — high value for fees deletion.
+31. **No role separation.** Single admin; any login = full admin. Should add `user_roles` table with `has_role()` security definer + RLS.
+32. **No 2FA / password reset link visible.**
+33. **No full DB backup/restore export.**
+34. **No analytics events.**
+35. **No Ctrl+K command palette** (industry-standard for admin apps).
+36. **No optimistic updates** on attendance / payment — feels laggy on slow networks.
 
 ---
 
 ## Linking & Navigation Audit
 
-| Link | Status |
+| Link / Flow | Status |
 |---|---|
-| `/` Landing → `/login` | ✅ |
-| `/login` → `/dashboard` | ✅ via useEffect (slight flash, see #6) |
-| `/dashboard` "View All" → `/fees` | ✅ |
-| Nav: Dashboard, Students, Fees, Attendance, Tests, Teachers, Reports, **WhatsApp** | ✅ all reachable |
-| Landing page hash anchors `#home #courses #features #contact` | ⚠️ in-page only, see #13 |
-| 404 fallback | ✅ has `notFoundComponent` |
-| Router error boundary | ✅ `defaultErrorComponent` |
+| `/` Landing → `/login` (Admin Login button) | ✅ |
+| `/login` → `/dashboard` after successful login | ✅ (no flash, blank shell rendered) |
+| `/login` ← `/` (no back link from login) | ⚠️ minor |
+| Navbar: Dashboard, Students, Fees, Attendance, Tests, Teachers, Reports, WhatsApp Logs | ✅ all reachable |
+| Dashboard "View All" → `/fees` | ✅ |
+| Dashboard sendReminder → wa.me + log + toast | ✅ |
+| 404 fallback (`/random-url`) | ✅ via `notFoundComponent` in `__root.tsx` |
+| Router-level `defaultErrorComponent` | ❌ **missing** |
+| `_authenticated` `beforeLoad` auth check | ✅ |
+| `_authenticated` per-route error boundary | ❌ none |
+| Landing hash anchors `#home/#courses/#features/#contact` | ⚠️ in-page only (#10) |
+| Logout → returns to `/login` | ✅ via auth context |
 
 ---
 
 ## Recommended fix batches
 
-### Batch E — Critical correctness (do first, ~5 files)
-Fix #1, #2, #3, #4, #5 (label only), #6, #7. Files: `reports.tsx`, `students.tsx`, `attendance.tsx`, `login.tsx`, `academic-year-context.tsx`, `_authenticated.tsx`.
+### Batch G — Critical correctness + structure (~4 files)
+Fix #1, #3, #4, #6 (default last-30-days), #7, #20 (add `defaultErrorComponent`).
+Files: `reports.tsx`, `students.tsx`, `tests.tsx`, `whatsapp-logs.tsx`, `router.tsx`.
 
-### Batch F — High-value UX (4 files)
-Fix #8, #9, #10, #12, #15, #17, #27, #28, #30. Files: `students.tsx`, `tests.tsx`, `teachers.tsx`, `dashboard.tsx`, `reports.tsx`.
+### Batch H — UX & navigation polish (~5 files)
+Fix #9 (replace raw month inputs with shadcn Input), #12 (collapse nav at lg not md), #13+14 (router scroll + preload), #17 (empty-state hints), #19 (favicon + theme-color), #22 (mobile nav dedup), #26 (hide 0/0 days), #27 (remove dead code).
+Files: `router.tsx`, `__root.tsx`, `index.html`, `AdminTopNav.tsx`, `reports.tsx`, `teachers.tsx`, `students.tsx`, `fees.tsx`, `attendance.tsx`.
 
-### Batch G — Polish & robustness (~6 files + favicon)
-Fix #18, #21 (date-range), #22 (duplicate check), #24 (favicon), #25 (theme-color), #26, #29 (error boundary in layout), #40. Files: layout, landing meta, students form.
-
-### Batch H — Larger features (defer until asked)
-- #31 PWA manifest
-- #33 CSV import
-- #34/35 Audit trail + roles
-- #36 Auth hardening (2FA)
-- #37 Full DB backup
-- #38 SMS fallback (needs backend)
+### Batch I — Larger features (defer — ask before)
+- #10 Landing hash → routes split (services, about, contact)
+- #15 Sortable Students table
+- #18 Duplicate-student check
+- #21 Date-range picker on Reports
+- #23 Print-friendly profile
+- #24 CSV import
+- #28 PWA manifest
+- #30/31 Audit trail + roles (RLS overhaul)
+- #35 Ctrl+K palette
+- #36 Optimistic updates
 
 ---
 
-## Decisions needed before Batch E
+## Decisions needed before Batch G
 
-**For #5 fixed-salary teachers:** prefer (a) "show full salary, label as Fixed Monthly", (b) "pro-rate by present/working days", or (c) "only count if >50% attendance"?
+**For #6 WhatsApp Logs:** default view should be (a) last 30 days, (b) last 7 days, (c) all-time but paginated 50/page, or (d) AY-scoped via studentMap join?
 
-**For #7 default AY:** should it default to (a) `ACADEMIC_YEARS[0]` (latest), (b) auto-derive from today via `deriveAcademicYear(new Date())`, or (c) keep "2025-26" explicit?
+**For #12 nav breakpoint:** collapse to hamburger at (a) `lg:` (1024px — current `md:` is too tight) or (b) keep `md:` but reduce icon+text to icon-only between md-lg?
 
-**My recommendation:** Run **Batch E + F** in one go (10 files, no DB migration, all safe). Defer G/H to separate turns. For #5 use (a) with label, for #7 use (b) auto-derive — most natural for users.
+**My recommendation:** Run **Batch G + H in one go** (~9 files, no DB migration). For #6 use (a) last-30-days default; for #12 use (a) `lg:` breakpoint. Defer Batch I — ask one feature at a time.
 
