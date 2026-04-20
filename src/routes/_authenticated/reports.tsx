@@ -67,7 +67,9 @@ function ReportsPage() {
     queryFn: async () => (await supabase.from("teacher_attendance").select("*").eq("academic_year", year).gte("date", monthStart).lte("date", monthEnd)).data || [],
   });
 
+  // Students tab — only active students (matches Pending Fees tab so counts are consistent)
   const filteredStudents = students.filter((s) => {
+    if (s.status !== "active") return false;
     const mc = filterClass === "all" || s.class === filterClass;
     const mm = filterMedium === "all" || s.medium === filterMedium;
     return mc && mm;
@@ -78,16 +80,17 @@ function ReportsPage() {
     queryKey: ["payments-all"],
     queryFn: async () => (await supabase.from("payments").select("*")).data || [],
   });
-  // Pending = current-AY active students only (the AY filter on `students` query already restricts to year)
-  const pendingData = students.filter((s) => s.status === "active" && s.academic_year === year).map((s) => {
+  // Active students for current AY — used by both Students tab and Pending so counts match
+  const activeStudents = students.filter((s) => s.status === "active" && s.academic_year === year);
+  const pendingData = activeStudents.map((s) => {
     const paid = allPayments.filter((p) => p.student_id === s.id).reduce((sum, p) => sum + safeNum(p.amount), 0);
     const total = safeNum(s.total_fees) - safeNum(s.discount);
     return { ...s, paid, total, remaining: total - paid };
   }).filter((s) => s.remaining > 0).sort((a, b) => b.remaining - a.remaining);
   const totalPendingAmount = pendingData.reduce((sum, s) => sum + s.remaining, 0);
 
-  // Monthly collection (this month payments only)
-  const monthPayments = payments.filter((p) => p.payment_date >= monthStart && p.payment_date <= monthEnd);
+  // Monthly collection — uses ALL payments (cross-AY safe), filtered only by month date
+  const monthPayments = allPayments.filter((p) => p.payment_date >= monthStart && p.payment_date <= monthEnd);
   const monthTotal = monthPayments.reduce((sum, p) => sum + safeNum(p.amount), 0);
 
   // Salary — fixed teachers always get full monthly salary (industry standard); UI shows present/working days for transparency
