@@ -197,7 +197,11 @@ function StudentsPage() {
                     {isLoading ? (
                       <TableRow><TableCell colSpan={3} className="text-center py-8 text-sm text-muted-foreground">Loading...</TableCell></TableRow>
                     ) : filtered.length === 0 ? (
-                      <TableRow><TableCell colSpan={3} className="text-center py-8 text-sm text-muted-foreground">No students found</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={3} className="text-center py-8 text-sm text-muted-foreground">
+                        {(search || filterClass !== "all" || filterMedium !== "all")
+                          ? <>No students match your filters. <button type="button" onClick={() => { setSearch(""); setFilterClass("all"); setFilterMedium("all"); }} className="underline">Clear filters</button></>
+                          : "No students found"}
+                      </TableCell></TableRow>
                     ) : (
                       filtered.map((s) => (
                         <TableRow
@@ -497,7 +501,7 @@ function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"stu
     onError: (e) => toast.error(e.message),
   });
 
-  const finalFees = (Number(form.total_fees) || 0) - (Number(form.discount) || 0);
+  const finalFees = safeNum(form.total_fees) - safeNum(form.discount);
   const availableSubjects = SUBJECTS_BY_CLASS[form.class] || [];
 
   return (

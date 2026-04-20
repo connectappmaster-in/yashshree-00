@@ -40,10 +40,8 @@ function ReportsPage() {
     queryKey: ["students", year],
     queryFn: async () => (await supabase.from("students").select("*").eq("academic_year", year).order("name")).data || [],
   });
-  const { data: payments = [] } = useQuery({
-    queryKey: ["payments", year],
-    queryFn: async () => (await supabase.from("payments").select("*").eq("academic_year", year)).data || [],
-  });
+  // No AY-filter: cross-year payments are aggregated by month/student in collection & student summaries
+
   const { data: teachers = [] } = useQuery({
     queryKey: ["teachers"],
     queryFn: async () => (await supabase.from("teachers").select("*").order("name")).data || [],
@@ -67,7 +65,9 @@ function ReportsPage() {
     queryFn: async () => (await supabase.from("teacher_attendance").select("*").eq("academic_year", year).gte("date", monthStart).lte("date", monthEnd)).data || [],
   });
 
+  // Students tab — only active students (matches Pending Fees tab so counts are consistent)
   const filteredStudents = students.filter((s) => {
+    if (s.status !== "active") return false;
     const mc = filterClass === "all" || s.class === filterClass;
     const mm = filterMedium === "all" || s.medium === filterMedium;
     return mc && mm;
@@ -78,16 +78,17 @@ function ReportsPage() {
     queryKey: ["payments-all"],
     queryFn: async () => (await supabase.from("payments").select("*")).data || [],
   });
-  // Pending = current-AY active students only (the AY filter on `students` query already restricts to year)
-  const pendingData = students.filter((s) => s.status === "active" && s.academic_year === year).map((s) => {
+  // Active students for current AY — used by both Students tab and Pending so counts match
+  const activeStudents = students.filter((s) => s.status === "active" && s.academic_year === year);
+  const pendingData = activeStudents.map((s) => {
     const paid = allPayments.filter((p) => p.student_id === s.id).reduce((sum, p) => sum + safeNum(p.amount), 0);
     const total = safeNum(s.total_fees) - safeNum(s.discount);
     return { ...s, paid, total, remaining: total - paid };
   }).filter((s) => s.remaining > 0).sort((a, b) => b.remaining - a.remaining);
   const totalPendingAmount = pendingData.reduce((sum, s) => sum + s.remaining, 0);
 
-  // Monthly collection (this month payments only)
-  const monthPayments = payments.filter((p) => p.payment_date >= monthStart && p.payment_date <= monthEnd);
+  // Monthly collection — uses ALL payments (cross-AY safe), filtered only by month date
+  const monthPayments = allPayments.filter((p) => p.payment_date >= monthStart && p.payment_date <= monthEnd);
   const monthTotal = monthPayments.reduce((sum, p) => sum + safeNum(p.amount), 0);
 
   // Salary — fixed teachers always get full monthly salary (industry standard); UI shows present/working days for transparency
@@ -265,7 +266,7 @@ function ReportsPage() {
 
         <TabsContent value="collection" className="mt-4 space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
-            <input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} className="border rounded-md px-3 py-2 text-sm bg-background" />
+            <Input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} className="w-[160px]" />
             <ExportButtons exporters={exportAll(
               `Collection ${reportMonth}`,
               ["Date", "Student", "Mode", "Amount"],
@@ -307,7 +308,7 @@ function ReportsPage() {
 
         <TabsContent value="attendance" className="mt-4 space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
-            <input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} className="border rounded-md px-3 py-2 text-sm bg-background" />
+            <Input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} className="w-[160px]" />
             <Select value={attClass} onValueChange={setAttClass}>
               <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -354,7 +355,7 @@ function ReportsPage() {
 
         <TabsContent value="salary" className="mt-4 space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
-            <input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} className="border rounded-md px-3 py-2 text-sm bg-background" />
+            <Input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} className="w-[160px]" />
             <ExportButtons exporters={exportAll(
               `Teacher Salary ${reportMonth}`,
               ["Teacher", "Subject", "Type", "Per Lecture", "Lectures", "Salary"],
@@ -376,7 +377,9 @@ function ReportsPage() {
                       <TableCell>{t.subject}</TableCell>
                       <TableCell className="text-xs">{t.payment_type === "fixed" ? "Fixed monthly" : "Per lecture"}</TableCell>
                       <TableCell className="text-right">{t.count}</TableCell>
-                      <TableCell className="text-right text-xs text-muted-foreground">{t.presentDays}/{workingDays} days</TableCell>
+                      <TableCell className="text-right text-xs text-muted-foreground">
+                        {workingDays > 0 ? `${t.presentDays}/${workingDays} days` : <span className="italic">No attendance logged</span>}
+                      </TableCell>
                       <TableCell className="text-right font-bold">₹{t.salary.toLocaleString("en-IN")}</TableCell>
                     </TableRow>
                   ))}

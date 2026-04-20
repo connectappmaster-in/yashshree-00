@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -115,7 +115,11 @@ function TestsPage() {
           <Card><CardContent className="p-0">
             <div className="max-h-[calc(100vh-280px)] overflow-y-auto">
               {filteredTests.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">No tests yet</p>
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  {filterStandard !== "all"
+                    ? <>No tests for {filterStandard}. <button type="button" onClick={() => setFilterStandard("all")} className="underline">Clear filter</button></>
+                    : "No tests yet"}
+                </p>
               ) : filteredTests.map((t) => (
                 <div
                   key={t.id}
@@ -188,6 +192,9 @@ function TestsPage() {
 
 function MarksEntryTable({ test, students, results, onSaved }: { test: Tables<"tests">; students: Tables<"students">[]; results: Tables<"test_results">[]; onSaved: () => void }) {
   const [marks, setMarks] = useState<Record<string, string>>({});
+
+  // Reset draft marks whenever the selected test changes — prevents cross-test contamination
+  useEffect(() => { setMarks({}); }, [test.id]);
 
   const initialMarks = (sid: string) => {
     if (marks[sid] !== undefined) return marks[sid];

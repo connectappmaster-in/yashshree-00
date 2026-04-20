@@ -61,7 +61,7 @@ export function AdminTopNav() {
             <span className="hidden sm:inline">Yashshree Classes</span>
           </Link>
 
-          <div className="hidden md:flex items-center gap-0.5 overflow-x-auto">
+          <div className="hidden lg:flex items-center gap-0.5 overflow-x-auto">
             {navItems.map((item) => (
               <Link
                 key={item.url}
@@ -82,10 +82,11 @@ export function AdminTopNav() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Year dropdown lives in topbar from lg+ to avoid duplication with mobile menu */}
             <select
               value={year}
               onChange={(e) => setYear(e.target.value)}
-              className="hidden sm:block bg-primary-foreground/10 text-primary-foreground text-xs font-medium rounded-md px-2 py-1.5 border border-primary-foreground/20 focus:outline-none focus:ring-1 focus:ring-secondary"
+              className="hidden lg:block bg-primary-foreground/10 text-primary-foreground text-xs font-medium rounded-md px-2 py-1.5 border border-primary-foreground/20 focus:outline-none focus:ring-1 focus:ring-secondary"
               title="Academic Year"
             >
               {ACADEMIC_YEARS.map((y) => (
@@ -132,7 +133,7 @@ export function AdminTopNav() {
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden text-primary-foreground"
+              className="lg:hidden text-primary-foreground"
               onClick={() => setMobileOpen(!mobileOpen)}
             >
               {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -141,7 +142,7 @@ export function AdminTopNav() {
         </div>
 
         {mobileOpen && (
-          <div className="md:hidden border-t border-primary-foreground/10 pb-2 animate-fade-in">
+          <div className="lg:hidden border-t border-primary-foreground/10 pb-2 animate-fade-in">
             {navItems.map((item) => (
               <Link
                 key={item.url}
