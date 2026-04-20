@@ -23,12 +23,19 @@ export const Route = createFileRoute("/_authenticated/reports")({
 });
 
 const CLASSES = ["5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th"];
-const MEDIUMS = ["Hindi", "English", "Marathi", "CBSE", "SSC"];
+const BOARDS = ["CBSE", "SSC"] as const;
+type Board = (typeof BOARDS)[number];
+const MEDIUMS_BY_BOARD: Record<Board, string[]> = {
+  CBSE: ["English"],
+  SSC: ["Marathi", "Semi English", "English"],
+};
+const ALL_MEDIUMS = ["Marathi", "Semi English", "English"];
 type Frequency = "Weekly" | "Monthly" | "Quarterly" | "Yearly";
 
 function ReportsPage() {
   const { year } = useAcademicYear();
   const [filterClass, setFilterClass] = useState("all");
+  const [filterBoard, setFilterBoard] = useState("all");
   const [filterMedium, setFilterMedium] = useState("all");
   const [attClass, setAttClass] = useState("all");
   const [reportMonth, setReportMonth] = useState(format(new Date(), "yyyy-MM"));
@@ -69,9 +76,11 @@ function ReportsPage() {
   const filteredStudents = students.filter((s) => {
     if (s.status !== "active") return false;
     const mc = filterClass === "all" || s.class === filterClass;
+    const mb = filterBoard === "all" || (s as any).board === filterBoard;
     const mm = filterMedium === "all" || s.medium === filterMedium;
-    return mc && mm;
+    return mc && mb && mm;
   });
+  const filterMediumOptions = filterBoard === "all" ? ALL_MEDIUMS : MEDIUMS_BY_BOARD[filterBoard as Board];
 
   // Pending fees — uses ALL payments to avoid AY-mismatch inflation
   const { data: allPayments = [] } = useQuery({
@@ -192,24 +201,31 @@ function ReportsPage() {
                 {CLASSES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Select value={filterMedium} onValueChange={setFilterMedium}>
+            <Select value={filterBoard} onValueChange={(v) => { setFilterBoard(v); setFilterMedium("all"); }}>
               <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="all">All Boards</SelectItem>
+                {BOARDS.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterMedium} onValueChange={setFilterMedium}>
+              <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
                 <SelectItem value="all">All Medium</SelectItem>
-                {MEDIUMS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                {filterMediumOptions.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
               </SelectContent>
             </Select>
             <ExportButtons exporters={exportAll(
               "Students List",
-              ["Name", "Mobile", "Class", "Medium", "Batch", "Fees", "Status"],
-              filteredStudents.map((s) => [s.name, s.mobile, s.class, s.medium, s.batch, Number(s.total_fees) - Number(s.discount), s.status]),
+              ["Name", "Mobile", "Class", "Board", "Medium", "Batch", "Fees", "Status"],
+              filteredStudents.map((s) => [s.name, s.mobile, s.class, (s as any).board ?? "", s.medium, s.batch, Number(s.total_fees) - Number(s.discount), s.status]),
               "students"
             )} />
           </div>
           <Card><CardContent className="p-0">
             <Table>
               <TableHeader><TableRow>
-                <TableHead>Name</TableHead><TableHead>Mobile</TableHead><TableHead>Class</TableHead><TableHead>Medium</TableHead><TableHead>Batch</TableHead><TableHead>Fees</TableHead><TableHead>Status</TableHead>
+                <TableHead>Name</TableHead><TableHead>Mobile</TableHead><TableHead>Class</TableHead><TableHead>Board</TableHead><TableHead>Medium</TableHead><TableHead>Batch</TableHead><TableHead>Fees</TableHead><TableHead>Status</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {filteredStudents.map((s) => (
@@ -217,6 +233,7 @@ function ReportsPage() {
                     <TableCell className="font-medium">{s.name}</TableCell>
                     <TableCell>{s.mobile}</TableCell>
                     <TableCell>{s.class}</TableCell>
+                    <TableCell>{(s as any).board}</TableCell>
                     <TableCell>{s.medium}</TableCell>
                     <TableCell>{s.batch}</TableCell>
                     <TableCell>₹{(Number(s.total_fees) - Number(s.discount)).toLocaleString("en-IN")}</TableCell>
