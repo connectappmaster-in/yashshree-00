@@ -25,7 +25,13 @@ export const Route = createFileRoute("/_authenticated/students")({
 });
 
 const CLASSES = ["5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th"];
-const MEDIUMS = ["Hindi", "English", "Marathi", "CBSE", "SSC"];
+const BOARDS = ["CBSE", "SSC"] as const;
+type Board = (typeof BOARDS)[number];
+const MEDIUMS_BY_BOARD: Record<Board, string[]> = {
+  CBSE: ["English"],
+  SSC: ["Marathi", "Semi English", "English"],
+};
+const ALL_MEDIUMS = ["Marathi", "Semi English", "English"];
 const SUBJECTS_BY_CLASS: Record<string, string[]> = {
   "5th": ["Maths", "Science", "English", "Hindi", "Social Science"],
   "6th": ["Maths", "Science", "English", "Hindi", "Social Science"],
@@ -44,6 +50,7 @@ function StudentsPage() {
   const { year } = useAcademicYear();
   const [search, setSearch] = useState("");
   const [filterClass, setFilterClass] = useState("all");
+  const [filterBoard, setFilterBoard] = useState("all");
   const [filterMedium, setFilterMedium] = useState("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -118,9 +125,12 @@ function StudentsPage() {
   const filtered = studentSummary.filter((s) => {
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.mobile.includes(search);
     const matchClass = filterClass === "all" || s.class === filterClass;
+    const matchBoard = filterBoard === "all" || (s as any).board === filterBoard;
     const matchMedium = filterMedium === "all" || s.medium === filterMedium;
-    return matchSearch && matchClass && matchMedium;
+    return matchSearch && matchClass && matchBoard && matchMedium;
   });
+
+  const filterMediumOptions = filterBoard === "all" ? ALL_MEDIUMS : MEDIUMS_BY_BOARD[filterBoard as Board];
 
   const selected = selectedId ? studentSummary.find((s) => s.id === selectedId) : null;
 
@@ -165,17 +175,24 @@ function StudentsPage() {
               </div>
               <div className="flex gap-2 items-center flex-wrap">
                 <Select value={filterClass} onValueChange={setFilterClass}>
-                  <SelectTrigger className="w-[100px] h-8 text-xs"><SelectValue placeholder="Class" /></SelectTrigger>
+                  <SelectTrigger className="w-[90px] h-8 text-xs"><SelectValue placeholder="Class" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All</SelectItem>
                     {CLASSES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <Select value={filterMedium} onValueChange={setFilterMedium}>
-                  <SelectTrigger className="w-[100px] h-8 text-xs"><SelectValue placeholder="Medium" /></SelectTrigger>
+                <Select value={filterBoard} onValueChange={(v) => { setFilterBoard(v); setFilterMedium("all"); }}>
+                  <SelectTrigger className="w-[90px] h-8 text-xs"><SelectValue placeholder="Board" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    {MEDIUMS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                    <SelectItem value="all">All Boards</SelectItem>
+                    {BOARDS.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Select value={filterMedium} onValueChange={setFilterMedium}>
+                  <SelectTrigger className="w-[110px] h-8 text-xs"><SelectValue placeholder="Medium" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Medium</SelectItem>
+                    {filterMediumOptions.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -198,8 +215,8 @@ function StudentsPage() {
                       <TableRow><TableCell colSpan={3} className="text-center py-8 text-sm text-muted-foreground">Loading...</TableCell></TableRow>
                     ) : filtered.length === 0 ? (
                       <TableRow><TableCell colSpan={3} className="text-center py-8 text-sm text-muted-foreground">
-                        {(search || filterClass !== "all" || filterMedium !== "all")
-                          ? <>No students match your filters. <button type="button" onClick={() => { setSearch(""); setFilterClass("all"); setFilterMedium("all"); }} className="underline">Clear filters</button></>
+                        {(search || filterClass !== "all" || filterBoard !== "all" || filterMedium !== "all")
+                          ? <>No students match your filters. <button type="button" onClick={() => { setSearch(""); setFilterClass("all"); setFilterBoard("all"); setFilterMedium("all"); }} className="underline">Clear filters</button></>
                           : "No students found"}
                       </TableCell></TableRow>
                     ) : (
@@ -210,7 +227,7 @@ function StudentsPage() {
                           onClick={() => setSelectedId(s.id)}
                         >
                           <TableCell className="py-2 font-medium">{s.name}</TableCell>
-                          <TableCell className="py-2 text-xs text-muted-foreground">{s.class} {s.medium}</TableCell>
+                          <TableCell className="py-2 text-xs text-muted-foreground">{s.class} • {(s as any).board} • {s.medium}</TableCell>
                           <TableCell className={`py-2 text-right text-xs font-bold ${s.remaining > 0 ? "text-destructive" : "text-success"}`}>
                             {s.remaining > 0 ? `₹${s.remaining.toLocaleString("en-IN")}` : "Paid ✓"}
                           </TableCell>
@@ -236,7 +253,7 @@ function StudentsPage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <h2 className="text-lg font-bold font-display">{selected.name}</h2>
-                      <p className="text-sm text-muted-foreground">{selected.mobile} • {selected.class} {selected.medium} • {selected.batch} Batch</p>
+                      <p className="text-sm text-muted-foreground">{selected.mobile} • {selected.class} • {(selected as any).board} {selected.medium} • {selected.batch} Batch</p>
                       <p className="text-xs text-muted-foreground mt-1">Due Day: {selected.fee_due_day}th • Admitted: {format(new Date(selected.admission_date), "dd MMM yyyy")}</p>
                     </div>
                     <div className="flex gap-1">
@@ -448,11 +465,16 @@ function StudentTestsView({ studentId, standard, tests, results }: { studentId: 
 }
 
 function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"students"> | null; defaultYear: string; onSuccess: () => void }) {
+  const initialBoard: Board = ((student as any)?.board === "CBSE" ? "CBSE" : "SSC");
+  const initialMedium = student?.medium && MEDIUMS_BY_BOARD[initialBoard].includes(student.medium)
+    ? student.medium
+    : MEDIUMS_BY_BOARD[initialBoard][0];
   const [form, setForm] = useState({
     name: student?.name || "",
     mobile: student?.mobile || "",
     class: student?.class || "10th",
-    medium: student?.medium || "Hindi",
+    board: initialBoard as Board,
+    medium: initialMedium,
     subjects: student?.subjects || [],
     admission_date: student?.admission_date || new Date().toISOString().split("T")[0],
     total_fees: student?.total_fees?.toString() || "",
@@ -471,10 +493,11 @@ function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"stu
         throw new Error("Mobile number must be exactly 10 digits");
       }
       const ay = form.academic_year || deriveAcademicYear(form.admission_date);
-      const payload: TablesInsert<"students"> = {
+      const payload = {
         name: form.name.trim(),
         mobile,
         class: form.class,
+        board: form.board,
         medium: form.medium,
         subjects: form.subjects,
         admission_date: form.admission_date,
@@ -485,7 +508,7 @@ function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"stu
         fee_due_day: Number(form.fee_due_day) || 1,
         status: form.status,
         academic_year: ay,
-      };
+      } as unknown as TablesInsert<"students">;
       if (student) {
         const { error } = await supabase.from("students").update(payload).eq("id", student.id);
         if (error) throw error;
@@ -518,10 +541,20 @@ function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"stu
           </Select>
         </div>
         <div className="space-y-1.5">
+          <Label>Board</Label>
+          <Select value={form.board} onValueChange={(v) => {
+            const board = v as Board;
+            setForm((f) => ({ ...f, board, medium: MEDIUMS_BY_BOARD[board][0] }));
+          }}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>{BOARDS.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
           <Label>Medium</Label>
           <Select value={form.medium} onValueChange={(v) => setForm((f) => ({ ...f, medium: v }))}>
             <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>{MEDIUMS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+            <SelectContent>{MEDIUMS_BY_BOARD[form.board].map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">

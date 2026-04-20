@@ -154,6 +154,7 @@ export type Database = {
           academic_year: string
           admission_date: string
           batch: string
+          board: string
           class: string
           created_at: string
           discount: number
@@ -171,6 +172,7 @@ export type Database = {
           academic_year?: string
           admission_date?: string
           batch?: string
+          board?: string
           class: string
           created_at?: string
           discount?: number
@@ -188,6 +190,7 @@ export type Database = {
           academic_year?: string
           admission_date?: string
           batch?: string
+          board?: string
           class?: string
           created_at?: string
           discount?: number

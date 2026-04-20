@@ -178,7 +178,7 @@ function FeesPage() {
               ) : filtered.map((s) => (
                 <TableRow key={s.id} className="hover:bg-muted/50">
                   <TableCell className="font-medium">{s.name}</TableCell>
-                  <TableCell className="text-xs">{s.class} {s.medium}</TableCell>
+                  <TableCell className="text-xs">{s.class} • {(s as any).board} {s.medium}</TableCell>
                   <TableCell className="text-right">₹{s.total.toLocaleString("en-IN")}</TableCell>
                   <TableCell className="text-right text-success">₹{s.paid.toLocaleString("en-IN")}</TableCell>
                   <TableCell className={`text-right font-bold ${s.remaining > 0 ? "text-destructive" : "text-success"}`}>
