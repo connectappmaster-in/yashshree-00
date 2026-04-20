@@ -40,10 +40,8 @@ function ReportsPage() {
     queryKey: ["students", year],
     queryFn: async () => (await supabase.from("students").select("*").eq("academic_year", year).order("name")).data || [],
   });
-  const { data: payments = [] } = useQuery({
-    queryKey: ["payments", year],
-    queryFn: async () => (await supabase.from("payments").select("*").eq("academic_year", year)).data || [],
-  });
+  // No AY-filter: cross-year payments are aggregated by month/student in collection & student summaries
+
   const { data: teachers = [] } = useQuery({
     queryKey: ["teachers"],
     queryFn: async () => (await supabase.from("teachers").select("*").order("name")).data || [],
@@ -268,7 +266,7 @@ function ReportsPage() {
 
         <TabsContent value="collection" className="mt-4 space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
-            <input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} className="border rounded-md px-3 py-2 text-sm bg-background" />
+            <Input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} className="w-[160px]" />
             <ExportButtons exporters={exportAll(
               `Collection ${reportMonth}`,
               ["Date", "Student", "Mode", "Amount"],
@@ -310,7 +308,7 @@ function ReportsPage() {
 
         <TabsContent value="attendance" className="mt-4 space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
-            <input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} className="border rounded-md px-3 py-2 text-sm bg-background" />
+            <Input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} className="w-[160px]" />
             <Select value={attClass} onValueChange={setAttClass}>
               <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -357,7 +355,7 @@ function ReportsPage() {
 
         <TabsContent value="salary" className="mt-4 space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
-            <input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} className="border rounded-md px-3 py-2 text-sm bg-background" />
+            <Input type="month" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} className="w-[160px]" />
             <ExportButtons exporters={exportAll(
               `Teacher Salary ${reportMonth}`,
               ["Teacher", "Subject", "Type", "Per Lecture", "Lectures", "Salary"],
@@ -379,7 +377,9 @@ function ReportsPage() {
                       <TableCell>{t.subject}</TableCell>
                       <TableCell className="text-xs">{t.payment_type === "fixed" ? "Fixed monthly" : "Per lecture"}</TableCell>
                       <TableCell className="text-right">{t.count}</TableCell>
-                      <TableCell className="text-right text-xs text-muted-foreground">{t.presentDays}/{workingDays} days</TableCell>
+                      <TableCell className="text-right text-xs text-muted-foreground">
+                        {workingDays > 0 ? `${t.presentDays}/${workingDays} days` : <span className="italic">No attendance logged</span>}
+                      </TableCell>
                       <TableCell className="text-right font-bold">₹{t.salary.toLocaleString("en-IN")}</TableCell>
                     </TableRow>
                   ))}
