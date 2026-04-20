@@ -17,8 +17,8 @@ import {
   Sun,
   Moon,
   User,
+  MessageCircle,
 } from "lucide-react";
-import { FaWhatsapp } from "react-icons/fa";
 import { useState } from "react";
 import {
   DropdownMenu,
@@ -37,7 +37,7 @@ const navItems = [
   { title: "Test Reports", url: "/tests", icon: ClipboardList },
   { title: "Teachers", url: "/teachers", icon: GraduationCap },
   { title: "Reports", url: "/reports", icon: BarChart3 },
-  { title: "WhatsApp", url: "/whatsapp-logs", icon: MessageSquare },
+  { title: "WhatsApp", url: "/whatsapp-logs", icon: MessageCircle },
 ];
 
 export function AdminTopNav() {
