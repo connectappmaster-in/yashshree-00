@@ -17,8 +17,8 @@ import {
   Sun,
   Moon,
   User,
-  MessageSquare,
 } from "lucide-react";
+import { FaWhatsapp } from "react-icons/fa";
 import { useState } from "react";
 import {
   DropdownMenu,
