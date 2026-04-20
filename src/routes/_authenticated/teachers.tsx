@@ -145,8 +145,10 @@ function TeachersPage() {
                       <TableCell className="text-right">{t.lectureCount}</TableCell>
                       <TableCell className="text-right font-bold">
                         ₹{t.salary.toLocaleString("en-IN")}
-                        {t.payment_type === "fixed" && workingDays > 0 && (
-                          <span className="block text-[10px] font-normal text-muted-foreground">{t.presentDays}/{workingDays} days</span>
+                        {t.payment_type === "fixed" && (
+                          workingDays > 0
+                            ? <span className="block text-[10px] font-normal text-muted-foreground">{t.presentDays}/{workingDays} days</span>
+                            : <span className="block text-[10px] font-normal italic text-muted-foreground">No attendance logged</span>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
