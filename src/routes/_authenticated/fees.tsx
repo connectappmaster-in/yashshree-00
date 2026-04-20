@@ -170,7 +170,11 @@ function FeesPage() {
             </TableHeader>
             <TableBody>
               {filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">No students</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">
+                  {(search || filterClass !== "all" || pendingOnly)
+                    ? <>No students match your filters. <button type="button" onClick={() => { setSearch(""); setFilterClass("all"); setPendingOnly(false); }} className="underline">Clear filters</button></>
+                    : "No students"}
+                </TableCell></TableRow>
               ) : filtered.map((s) => (
                 <TableRow key={s.id} className="hover:bg-muted/50">
                   <TableCell className="font-medium">{s.name}</TableCell>

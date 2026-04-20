@@ -186,7 +186,11 @@ function AttendancePage() {
             </TableHeader>
             <TableBody>
               {filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={4} className="text-center py-10 text-muted-foreground">No students found</TableCell></TableRow>
+                <TableRow><TableCell colSpan={4} className="text-center py-10 text-muted-foreground">
+                  {(filterClass !== "all" || filterBatch !== "all")
+                    ? <>No active students match your filters. <button type="button" onClick={() => { setFilterClass("all"); setFilterBatch("all"); }} className="underline">Clear filters</button></>
+                    : "No active students found"}
+                </TableCell></TableRow>
               ) : (
                 filtered.map((s) => (
                   <TableRow key={s.id} className="hover:bg-muted/50">
