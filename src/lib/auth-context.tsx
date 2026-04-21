@@ -4,6 +4,37 @@ import type { User } from "@supabase/supabase-js";
 
 export type AppRole = "admin" | "teacher";
 
+// Install a one-time fetch interceptor on the client so server-fn requests
+// (which go to /_serverFn/...) automatically include the Supabase JWT.
+if (typeof window !== "undefined" && !(window as unknown as { __sbFetchPatched?: boolean }).__sbFetchPatched) {
+  (window as unknown as { __sbFetchPatched?: boolean }).__sbFetchPatched = true;
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = async (input, init) => {
+    try {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : (input as Request).url;
+      if (url && url.includes("/_serverFn/")) {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (token) {
+          const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
+          if (!headers.has("authorization")) {
+            headers.set("authorization", `Bearer ${token}`);
+          }
+          return originalFetch(input, { ...init, headers });
+        }
+      }
+    } catch {
+      // fall through to original fetch
+    }
+    return originalFetch(input, init);
+  };
+}
+
 interface AuthState {
   isAuthenticated: boolean;
   user: User | null;
