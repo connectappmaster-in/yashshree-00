@@ -67,7 +67,7 @@ export function AdminTopNav() {
           </Link>
 
           <div className="hidden lg:flex items-center gap-0.5 overflow-x-auto">
-            {navItems.map((item) => (
+            {visibleNavItems.map((item) => (
               <Link
                 key={item.url}
                 to={item.url}
@@ -148,7 +148,7 @@ export function AdminTopNav() {
 
         {mobileOpen && (
           <div className="lg:hidden border-t border-primary-foreground/10 pb-2 animate-fade-in">
-            {navItems.map((item) => (
+            {visibleNavItems.map((item) => (
               <Link
                 key={item.url}
                 to={item.url}
