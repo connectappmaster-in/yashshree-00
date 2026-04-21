@@ -17,9 +17,10 @@ import { format, startOfMonth, endOfMonth, subDays, subMonths, subYears } from "
 import { useAcademicYear } from "@/lib/academic-year-context";
 import { exportCSV, exportExcel, exportPDF } from "@/lib/export-utils";
 import { safeNum, buildWhatsappUrl } from "@/lib/format";
+import { AdminGuard } from "@/components/AdminGuard";
 
 export const Route = createFileRoute("/_authenticated/reports")({
-  component: ReportsPage,
+  component: () => <AdminGuard><ReportsPage /></AdminGuard>,
 });
 
 const CLASSES = ["5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th"];

@@ -8,9 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { format, subDays } from "date-fns";
+import { AdminGuard } from "@/components/AdminGuard";
 
 export const Route = createFileRoute("/_authenticated/whatsapp-logs")({
-  component: WhatsAppLogsPage,
+  component: () => <AdminGuard><WhatsAppLogsPage /></AdminGuard>,
 });
 
 const PAGE_SIZE = 50;
