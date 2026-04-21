@@ -18,6 +18,7 @@ import {
   Moon,
   User,
   MessageCircle,
+  UserCog,
 } from "lucide-react";
 import { useState } from "react";
 import {
@@ -29,20 +30,24 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const navItems = [
+type NavItem = { title: string; url: string; icon: typeof LayoutDashboard; adminOnly?: boolean };
+
+const navItems: NavItem[] = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Students", url: "/students", icon: Users },
-  { title: "Fees", url: "/fees", icon: IndianRupee },
+  { title: "Fees", url: "/fees", icon: IndianRupee, adminOnly: true },
   { title: "Attendance", url: "/attendance", icon: CalendarCheck },
   { title: "Test Reports", url: "/tests", icon: ClipboardList },
-  { title: "Teachers", url: "/teachers", icon: GraduationCap },
-  { title: "Reports", url: "/reports", icon: BarChart3 },
-  { title: "WhatsApp", url: "/whatsapp-logs", icon: MessageCircle },
+  { title: "Teachers", url: "/teachers", icon: GraduationCap, adminOnly: true },
+  { title: "Reports", url: "/reports", icon: BarChart3, adminOnly: true },
+  { title: "WhatsApp", url: "/whatsapp-logs", icon: MessageCircle, adminOnly: true },
+  { title: "Users", url: "/users", icon: UserCog, adminOnly: true },
 ];
 
 export function AdminTopNav() {
   const location = useLocation();
-  const { logout, user } = useAuth();
+  const { logout, user, isAdmin } = useAuth();
+  const visibleNavItems = navItems.filter((i) => !i.adminOnly || isAdmin);
   const { year, setYear } = useAcademicYear();
   const { theme, toggleTheme } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);

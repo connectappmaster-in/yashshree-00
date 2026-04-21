@@ -13,6 +13,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedWhatsappLogsRouteImport } from './routes/_authenticated/whatsapp-logs'
+import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
 import { Route as AuthenticatedTestsRouteImport } from './routes/_authenticated/tests'
 import { Route as AuthenticatedTeachersRouteImport } from './routes/_authenticated/teachers'
 import { Route as AuthenticatedStudentsRouteImport } from './routes/_authenticated/students'
@@ -41,6 +42,11 @@ const AuthenticatedWhatsappLogsRoute =
     path: '/whatsapp-logs',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedTestsRoute = AuthenticatedTestsRouteImport.update({
   id: '/tests',
   path: '/tests',
@@ -87,6 +93,7 @@ export interface FileRoutesByFullPath {
   '/students': typeof AuthenticatedStudentsRoute
   '/teachers': typeof AuthenticatedTeachersRoute
   '/tests': typeof AuthenticatedTestsRoute
+  '/users': typeof AuthenticatedUsersRoute
   '/whatsapp-logs': typeof AuthenticatedWhatsappLogsRoute
 }
 export interface FileRoutesByTo {
@@ -99,6 +106,7 @@ export interface FileRoutesByTo {
   '/students': typeof AuthenticatedStudentsRoute
   '/teachers': typeof AuthenticatedTeachersRoute
   '/tests': typeof AuthenticatedTestsRoute
+  '/users': typeof AuthenticatedUsersRoute
   '/whatsapp-logs': typeof AuthenticatedWhatsappLogsRoute
 }
 export interface FileRoutesById {
@@ -113,6 +121,7 @@ export interface FileRoutesById {
   '/_authenticated/students': typeof AuthenticatedStudentsRoute
   '/_authenticated/teachers': typeof AuthenticatedTeachersRoute
   '/_authenticated/tests': typeof AuthenticatedTestsRoute
+  '/_authenticated/users': typeof AuthenticatedUsersRoute
   '/_authenticated/whatsapp-logs': typeof AuthenticatedWhatsappLogsRoute
 }
 export interface FileRouteTypes {
@@ -127,6 +136,7 @@ export interface FileRouteTypes {
     | '/students'
     | '/teachers'
     | '/tests'
+    | '/users'
     | '/whatsapp-logs'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -139,6 +149,7 @@ export interface FileRouteTypes {
     | '/students'
     | '/teachers'
     | '/tests'
+    | '/users'
     | '/whatsapp-logs'
   id:
     | '__root__'
@@ -152,6 +163,7 @@ export interface FileRouteTypes {
     | '/_authenticated/students'
     | '/_authenticated/teachers'
     | '/_authenticated/tests'
+    | '/_authenticated/users'
     | '/_authenticated/whatsapp-logs'
   fileRoutesById: FileRoutesById
 }
@@ -189,6 +201,13 @@ declare module '@tanstack/react-router' {
       path: '/whatsapp-logs'
       fullPath: '/whatsapp-logs'
       preLoaderRoute: typeof AuthenticatedWhatsappLogsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/users': {
+      id: '/_authenticated/users'
+      path: '/users'
+      fullPath: '/users'
+      preLoaderRoute: typeof AuthenticatedUsersRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/tests': {
@@ -251,6 +270,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedStudentsRoute: typeof AuthenticatedStudentsRoute
   AuthenticatedTeachersRoute: typeof AuthenticatedTeachersRoute
   AuthenticatedTestsRoute: typeof AuthenticatedTestsRoute
+  AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
   AuthenticatedWhatsappLogsRoute: typeof AuthenticatedWhatsappLogsRoute
 }
 
@@ -262,6 +282,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedStudentsRoute: AuthenticatedStudentsRoute,
   AuthenticatedTeachersRoute: AuthenticatedTeachersRoute,
   AuthenticatedTestsRoute: AuthenticatedTestsRoute,
+  AuthenticatedUsersRoute: AuthenticatedUsersRoute,
   AuthenticatedWhatsappLogsRoute: AuthenticatedWhatsappLogsRoute,
 }
 
@@ -277,3 +298,12 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
