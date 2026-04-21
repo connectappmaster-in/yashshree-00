@@ -2,31 +2,70 @@ import { createContext, useContext, useState, useCallback, useEffect, type React
 import { supabase } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
+export type AppRole = "admin" | "teacher";
+
 interface AuthState {
   isAuthenticated: boolean;
   user: User | null;
   isReady: boolean;
+  role: AppRole | null;
+  teacherId: string | null;
+  isAdmin: boolean;
+  isTeacher: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
 
+async function fetchRole(userId: string): Promise<{ role: AppRole | null; teacherId: string | null }> {
+  const { data, error } = await supabase
+    .from("user_roles")
+    .select("role, teacher_id")
+    .eq("user_id", userId)
+    .order("role", { ascending: true }) // 'admin' < 'teacher' alphabetically; admin wins
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return { role: null, teacherId: null };
+  return { role: data.role as AppRole, teacherId: data.teacher_id ?? null };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [role, setRole] = useState<AppRole | null>(null);
+  const [teacherId, setTeacherId] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    let active = true;
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!active) return;
       setUser(session?.user ?? null);
+      if (session?.user) {
+        const r = await fetchRole(session.user.id);
+        if (!active) return;
+        setRole(r.role);
+        setTeacherId(r.teacherId);
+      }
       setIsReady(true);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null);
+      if (session?.user) {
+        const r = await fetchRole(session.user.id);
+        setRole(r.role);
+        setTeacherId(r.teacherId);
+      } else {
+        setRole(null);
+        setTeacherId(null);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
@@ -40,10 +79,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     await supabase.auth.signOut();
     setUser(null);
+    setRole(null);
+    setTeacherId(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated: !!user, user, isReady, login, logout }}>
+    <AuthContext.Provider
+      value={{
+        isAuthenticated: !!user,
+        user,
+        isReady,
+        role,
+        teacherId,
+        isAdmin: role === "admin",
+        isTeacher: role === "teacher",
+        login,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

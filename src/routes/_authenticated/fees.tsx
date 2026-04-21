@@ -16,9 +16,10 @@ import { Search, MessageCircle, IndianRupee, Send } from "lucide-react";
 import { format } from "date-fns";
 import { useAcademicYear, deriveAcademicYear } from "@/lib/academic-year-context";
 import { safeNum, buildWhatsappUrl, nextDueLabel } from "@/lib/format";
+import { AdminGuard } from "@/components/AdminGuard";
 
 export const Route = createFileRoute("/_authenticated/fees")({
-  component: FeesPage,
+  component: () => <AdminGuard><FeesPage /></AdminGuard>,
 });
 
 const CLASSES = ["5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th"];
