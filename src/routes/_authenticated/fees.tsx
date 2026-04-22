@@ -142,10 +142,47 @@ function FeesPage() {
           <h1 className="text-2xl font-bold font-display">Fees</h1>
           <Badge variant="outline" className="text-xs">AY {year}</Badge>
         </div>
-        <Button variant="outline" className="border-success text-success hover:bg-success/10 font-semibold" onClick={sendBulk}>
-          <Send className="h-4 w-4 mr-1" />Bulk Remind
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExport}
+            disabled={filtered.length === 0}
+            aria-label="Export fees to CSV"
+          >
+            <Download className="h-4 w-4 mr-1" />Export CSV
+          </Button>
+          <Button
+            variant="outline"
+            className="border-success text-success hover:bg-success/10 font-semibold"
+            onClick={() => {
+              if (bulkPending.length === 0) { toast.info("No pending fees with valid mobiles"); return; }
+              setBulkConfirmOpen(true);
+            }}
+            disabled={bulkSending}
+            aria-label="Send WhatsApp reminder to all pending students"
+          >
+            <Send className="h-4 w-4 mr-1" />{bulkSending ? "Sending…" : "Bulk Remind"}
+          </Button>
+        </div>
       </div>
+
+      <AlertDialog open={bulkConfirmOpen} onOpenChange={setBulkConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send {bulkPending.length} WhatsApp reminders?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will open a new WhatsApp tab for each student in sequence (one every ~700ms) and log the message in the audit trail. Allow popups for this site.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={runBulkSend} className="bg-success text-success-foreground hover:bg-success/90">
+              Send {bulkPending.length}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card><CardContent className="p-4">
