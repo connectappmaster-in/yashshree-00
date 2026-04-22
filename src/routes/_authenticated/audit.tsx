@@ -9,10 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
-import { Search, Download, ScrollText, Inbox } from "lucide-react";
+import { Search, Download, ScrollText } from "lucide-react";
 import { AdminGuard } from "@/components/AdminGuard";
 import { exportCSV } from "@/lib/export-utils";
 import { logAudit } from "@/lib/audit";
+import { EmptyState } from "@/components/EmptyState";
 
 export const Route = createFileRoute("/_authenticated/audit")({
   component: () => <AdminGuard><AuditPage /></AdminGuard>,
@@ -43,6 +44,7 @@ const ACTION_COLORS: Record<string, string> = {
   payment_recorded: "bg-success/15 text-success",
   attendance_marked: "bg-primary/15 text-primary",
   test_marks_saved: "bg-primary/15 text-primary",
+  lecture_logged: "bg-primary/15 text-primary",
   whatsapp_sent: "bg-secondary/40 text-secondary-foreground",
   whatsapp_broadcast: "bg-secondary/40 text-secondary-foreground",
   user_created: "bg-success/15 text-success",
@@ -216,9 +218,8 @@ function AuditPage() {
               {isLoading ? (
                 <TableRow><TableCell colSpan={5} className="text-center py-8 text-sm text-muted-foreground">Loading…</TableCell></TableRow>
               ) : rows.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="text-center py-10 text-sm text-muted-foreground">
-                  <Inbox className="h-6 w-6 mx-auto mb-2 opacity-50" />
-                  No audit events match your filters.
+                <TableRow><TableCell colSpan={5} className="p-0">
+                  <EmptyState title="No audit events" hint="Try clearing your filters or widening the date range." />
                 </TableCell></TableRow>
               ) : rows.map((l) => {
                 const isOpen = expandedId === l.id;
