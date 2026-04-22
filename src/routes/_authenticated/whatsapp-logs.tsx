@@ -83,10 +83,16 @@ function WhatsAppLogsPage() {
   const pageRows = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 
   const resend = async (log: typeof logs[0]) => {
-    const s = studentMap.get(log.student_id);
-    if (!s) { toast.error("Student not found"); return; }
-    const url = buildWhatsappUrl(s.mobile, log.message);
-    if (!url) { toast.error("Invalid mobile"); return; }
+    // Re-validate that the student still exists & is active before opening the deep link
+    const { data: fresh } = await supabase
+      .from("students")
+      .select("id, name, mobile, status")
+      .eq("id", log.student_id)
+      .maybeSingle();
+    if (!fresh) { toast.error("Student no longer exists"); return; }
+    if (fresh.status !== "active") { toast.error(`${fresh.name} is inactive`); return; }
+    const url = buildWhatsappUrl(fresh.mobile, log.message);
+    if (!url) { toast.error(`Invalid mobile for ${fresh.name}`); return; }
     window.open(url, "_blank");
     await supabase.from("whatsapp_logs").insert({ student_id: log.student_id, message: log.message, type: log.type });
     await logAudit("whatsapp_sent", "whatsapp", log.student_id, { type: log.type, resend: true });
