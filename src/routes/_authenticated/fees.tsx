@@ -191,11 +191,11 @@ function FeesPage() {
         </CardContent></Card>
         <Card><CardContent className="p-4">
           <p className="text-xs text-muted-foreground">Collected</p>
-          <p className="text-2xl font-bold text-success">₹{totalCollected.toLocaleString("en-IN")}</p>
+          <p className="text-2xl font-bold text-success">{inr(totalCollected)}</p>
         </CardContent></Card>
         <Card><CardContent className="p-4">
           <p className="text-xs text-muted-foreground">Pending</p>
-          <p className="text-2xl font-bold text-destructive">₹{totalPending.toLocaleString("en-IN")}</p>
+          <p className="text-2xl font-bold text-destructive">{inr(totalPending)}</p>
         </CardContent></Card>
       </div>
 
@@ -245,18 +245,18 @@ function FeesPage() {
                 <TableRow key={s.id} className="hover:bg-muted/50">
                   <TableCell className="font-medium">{s.name}</TableCell>
                   <TableCell className="text-xs">{s.class} • {(s as any).board} {s.medium}</TableCell>
-                  <TableCell className="text-right">₹{s.total.toLocaleString("en-IN")}</TableCell>
-                  <TableCell className="text-right text-success">₹{s.paid.toLocaleString("en-IN")}</TableCell>
+                  <TableCell className="text-right">{inr(s.total)}</TableCell>
+                  <TableCell className="text-right text-success">{inr(s.paid)}</TableCell>
                   <TableCell className={`text-right font-bold ${s.remaining > 0 ? "text-destructive" : "text-success"}`}>
-                    {s.remaining > 0 ? `₹${s.remaining.toLocaleString("en-IN")}` : "Paid ✓"}
+                    {s.remaining > 0 ? inr(s.remaining) : "Paid ✓"}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openPayment(s.id)} title="Add payment">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openPayment(s.id)} aria-label={`Add payment for ${s.name}`} title="Add payment">
                         <IndianRupee className="h-4 w-4 text-secondary-foreground" />
                       </Button>
                       {s.remaining > 0 && (
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => sendReminder(s)} title="Send reminder">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => sendReminder(s)} aria-label={`Send WhatsApp reminder to ${s.name}`} title="Send reminder">
                           <MessageCircle className="h-4 w-4 text-success" />
                         </Button>
                       )}
