@@ -50,15 +50,17 @@ interface AuthState {
 const AuthContext = createContext<AuthState | null>(null);
 
 async function fetchRole(userId: string): Promise<{ role: AppRole | null; teacherId: string | null }> {
-  const { data, error } = await supabase
+  // Explicit two-pass: prefer admin first, then teacher. Avoids relying on alphabetical sort intent.
+  const { data: rows, error } = await supabase
     .from("user_roles")
     .select("role, teacher_id")
-    .eq("user_id", userId)
-    .order("role", { ascending: true }) // 'admin' < 'teacher' alphabetically; admin wins
-    .limit(1)
-    .maybeSingle();
-  if (error || !data) return { role: null, teacherId: null };
-  return { role: data.role as AppRole, teacherId: data.teacher_id ?? null };
+    .eq("user_id", userId);
+  if (error || !rows || rows.length === 0) return { role: null, teacherId: null };
+  const adminRow = rows.find((r) => r.role === "admin");
+  if (adminRow) return { role: "admin", teacherId: adminRow.teacher_id ?? null };
+  const teacherRow = rows.find((r) => r.role === "teacher");
+  if (teacherRow) return { role: "teacher", teacherId: teacherRow.teacher_id ?? null };
+  return { role: null, teacherId: null };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -108,22 +110,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    // Capture identity before sign-out so the audit row has user_email
-    const { data: { user: cur } } = await supabase.auth.getUser();
-    if (cur) {
-      try {
-        await supabase.from("audit_logs").insert({
-          user_id: cur.id,
-          user_email: cur.email ?? null,
-          action: "logout",
-          entity: "auth",
-          entity_id: null,
-          details: {} as never,
-        });
-      } catch {
-        // ignore
-      }
-    }
+    // Route through the shared helper so audit logic stays in one place
+    await logAudit("logout", "auth", null, {});
     await supabase.auth.signOut();
     setUser(null);
     setRole(null);
