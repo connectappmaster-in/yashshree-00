@@ -449,6 +449,25 @@ export type Database = {
         }
         Returns: boolean
       }
+      log_audit_event: {
+        Args: {
+          _action: string
+          _details?: Json
+          _entity: string
+          _entity_id?: string
+        }
+        Returns: string
+      }
+      log_audit_event_anon: {
+        Args: {
+          _action: string
+          _attempted_email?: string
+          _details?: Json
+          _entity: string
+          _entity_id?: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "admin" | "teacher"

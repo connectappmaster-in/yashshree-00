@@ -52,20 +52,33 @@ export async function logAudit(
   userOverride?: { id?: string | null; email?: string | null },
 ): Promise<void> {
   try {
-    let userId = userOverride?.id ?? null;
-    let userEmail = userOverride?.email ?? null;
-    if (!userOverride) {
-      const { data: { user } } = await supabase.auth.getUser();
-      userId = user?.id ?? null;
-      userEmail = user?.email ?? null;
+    // Anonymous path: only used for login_failed (no session yet).
+    // Routed through a SECURITY DEFINER RPC that whitelists permitted anon actions
+    // and never accepts a user_id from the client (prevents spoofing).
+    if (userOverride && !userOverride.id) {
+      await (supabase.rpc as unknown as (
+        fn: string,
+        args: Record<string, unknown>,
+      ) => Promise<unknown>)("log_audit_event_anon", {
+        _action: action,
+        _entity: entity,
+        _entity_id: entity_id,
+        _details: details,
+        _attempted_email: userOverride.email ?? null,
+      });
+      return;
     }
-    await supabase.from("audit_logs").insert({
-      user_id: userId,
-      user_email: userEmail,
-      action,
-      entity,
-      entity_id,
-      details: details as never,
+
+    // Authenticated path: SECURITY DEFINER RPC stamps user_id + user_email
+    // server-side from auth.uid(); client cannot forge identity or actions.
+    await (supabase.rpc as unknown as (
+      fn: string,
+      args: Record<string, unknown>,
+    ) => Promise<unknown>)("log_audit_event", {
+      _action: action,
+      _entity: entity,
+      _entity_id: entity_id,
+      _details: details,
     });
   } catch {
     // ignore — never block UX on audit failure
