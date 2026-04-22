@@ -135,11 +135,24 @@ function MarkTab() {
 
   const copyFromYesterday = useMutation({
     mutationFn: async () => {
-      const yesterday = format(subDays(new Date(date), 1), "yyyy-MM-dd");
+      // Look back up to 14 days for the most recent date with attendance records
+      // (skips weekends/holidays automatically).
+      const lookbackStart = format(subDays(new Date(date), 14), "yyyy-MM-dd");
+      const lookbackEnd = format(subDays(new Date(date), 1), "yyyy-MM-dd");
+      const { data: recent } = await supabase
+        .from("attendance")
+        .select("date")
+        .eq("academic_year", year)
+        .gte("date", lookbackStart)
+        .lte("date", lookbackEnd)
+        .order("date", { ascending: false })
+        .limit(1);
+      const sourceDate = recent?.[0]?.date;
+      if (!sourceDate) return { count: 0, sourceDate: null as string | null };
       const { data } = await supabase
         .from("attendance")
         .select("*")
-        .eq("date", yesterday)
+        .eq("date", sourceDate)
         .eq("academic_year", year);
       const yMap: Record<string, "present" | "absent"> = {};
       (data || []).forEach((r) => { yMap[r.student_id] = r.status as "present" | "absent"; });
@@ -148,14 +161,18 @@ function MarkTab() {
         if (yMap[s.id]) draft[s.id] = yMap[s.id];
       });
       setAttendance((prev) => ({ ...prev, ...draft }));
-      return Object.keys(draft).length;
+      return { count: Object.keys(draft).length, sourceDate };
     },
-    onSuccess: async (count) => {
-      if (count === 0) toast.info("No attendance found for yesterday");
-      else {
-        toast.success(`Copied ${count} entries from yesterday`);
-        await logAudit("attendance_copied", "attendance", null, { date, count });
+    onSuccess: async ({ count, sourceDate }) => {
+      if (count === 0 || !sourceDate) {
+        toast.info("Nothing to copy from the last 14 days");
+        return;
       }
+      const label = sourceDate === format(subDays(new Date(date), 1), "yyyy-MM-dd")
+        ? "yesterday"
+        : format(new Date(sourceDate), "dd MMM");
+      toast.success(`Copied ${count} entries from ${label}`);
+      await logAudit("attendance_copied", "attendance", null, { date, source_date: sourceDate, count });
     },
     onError: (e) => toast.error(e.message),
   });

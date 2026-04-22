@@ -12,9 +12,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format, subDays, startOfMonth } from "date-fns";
 import { AdminGuard } from "@/components/AdminGuard";
-import { Send, Repeat, ChevronDown, ChevronRight, MessageCircle } from "lucide-react";
+import { Send, Repeat, ChevronDown, ChevronRight, MessageCircle, Download, Inbox } from "lucide-react";
 import { buildWhatsappUrl } from "@/lib/format";
 import { logAudit } from "@/lib/audit";
+import { exportCSV } from "@/lib/export-utils";
+import { EmptyState } from "@/components/EmptyState";
 
 export const Route = createFileRoute("/_authenticated/whatsapp-logs")({
   component: () => <AdminGuard><WhatsAppLogsPage /></AdminGuard>,
@@ -83,19 +85,48 @@ function WhatsAppLogsPage() {
   const pageRows = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 
   const resend = async (log: typeof logs[0]) => {
-    const s = studentMap.get(log.student_id);
-    if (!s) { toast.error("Student not found"); return; }
-    const url = buildWhatsappUrl(s.mobile, log.message);
-    if (!url) { toast.error("Invalid mobile"); return; }
+    // Re-validate that the student still exists & is active before opening the deep link
+    const { data: fresh } = await supabase
+      .from("students")
+      .select("id, name, mobile, status")
+      .eq("id", log.student_id)
+      .maybeSingle();
+    if (!fresh) { toast.error("Student no longer exists"); return; }
+    if (fresh.status !== "active") { toast.error(`${fresh.name} is inactive`); return; }
+    const url = buildWhatsappUrl(fresh.mobile, log.message);
+    if (!url) { toast.error(`Invalid mobile for ${fresh.name}`); return; }
     window.open(url, "_blank");
     await supabase.from("whatsapp_logs").insert({ student_id: log.student_id, message: log.message, type: log.type });
     await logAudit("whatsapp_sent", "whatsapp", log.student_id, { type: log.type, resend: true });
     toast.success("Resent");
   };
 
+  const handleExport = async () => {
+    exportCSV(
+      ["Sent At", "Student", "Mobile", "Type", "Message"],
+      filtered.map((l) => {
+        const s = studentMap.get(l.student_id);
+        return [
+          format(new Date(l.sent_at), "yyyy-MM-dd HH:mm"),
+          s?.name || "—",
+          s?.mobile || "",
+          l.type,
+          l.message,
+        ];
+      }),
+      `whatsapp_logs_${format(new Date(), "yyyy-MM-dd")}.csv`,
+    );
+    await logAudit("export", "whatsapp", null, { kind: "whatsapp_logs", rows: filtered.length });
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <h1 className="text-2xl font-bold font-display">WhatsApp</h1>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h1 className="text-2xl font-bold font-display">WhatsApp</h1>
+        <Button variant="outline" size="sm" onClick={handleExport} disabled={filtered.length === 0}>
+          <Download className="h-4 w-4 mr-1" />Export CSV
+        </Button>
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -150,7 +181,9 @@ function WhatsAppLogsPage() {
             </TableHeader>
             <TableBody>
               {pageRows.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground">No logs</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="p-0">
+                  <EmptyState icon={Inbox} title="No WhatsApp logs" hint="Adjust the filters or send a message to see it appear here." />
+                </TableCell></TableRow>
               ) : pageRows.map((log) => {
                 const st = studentMap.get(log.student_id);
                 const expanded = expandedId === log.id;

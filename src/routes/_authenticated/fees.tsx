@@ -9,15 +9,20 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Search, MessageCircle, IndianRupee, Send } from "lucide-react";
+import { Search, MessageCircle, IndianRupee, Send, Download } from "lucide-react";
 import { format } from "date-fns";
 import { useAcademicYear, deriveAcademicYear } from "@/lib/academic-year-context";
-import { safeNum, buildWhatsappUrl, nextDueLabel } from "@/lib/format";
+import { safeNum, buildWhatsappUrl, nextDueLabel, inr } from "@/lib/format";
 import { AdminGuard } from "@/components/AdminGuard";
 import { logAudit } from "@/lib/audit";
+import { exportCSV } from "@/lib/export-utils";
 
 export const Route = createFileRoute("/_authenticated/fees")({
   component: () => <AdminGuard><FeesPage /></AdminGuard>,
@@ -78,7 +83,7 @@ function FeesPage() {
   const totalCollected = ayPayments.reduce((sum, p) => sum + safeNum(p.amount), 0);
 
   const sendReminder = async (s: typeof studentFees[0]) => {
-    const msg = `Hello ${s.name}, your pending fees for Yashshree Classes is ₹${s.remaining.toLocaleString("en-IN")}. Please pay before ${nextDueLabel(s.fee_due_day)}. Thank you.`;
+    const msg = `Hello ${s.name}, your pending fees for Yashshree Classes is ${inr(s.remaining)}. Please pay before ${nextDueLabel(s.fee_due_day)}. Thank you.`;
     const url = buildWhatsappUrl(s.mobile, msg);
     if (!url) { toast.error(`Invalid mobile for ${s.name}`); return; }
     window.open(url, "_blank");
@@ -87,25 +92,45 @@ function FeesPage() {
     toast.success(`Reminder sent to ${s.name}`);
   };
 
-  // Bulk: log every reminder, open one tab at a time with a 600ms delay so the browser doesn't block popups.
-  const sendBulk = async () => {
-    const pending = filtered.filter((s) => s.remaining > 0 && buildWhatsappUrl(s.mobile, "x"));
-    if (pending.length === 0) { toast.info("No pending fees with valid mobiles"); return; }
-    const confirmed = window.confirm(
-      `This will log ${pending.length} WhatsApp reminders and open ${pending.length} tabs (one per student). Your browser may block tabs after the first — allow popups for this site. Continue?`
-    );
-    if (!confirmed) return;
-    let idx = 0;
-    for (const s of pending) {
-      const msg = `Hello ${s.name}, your pending fees for Yashshree Classes is ₹${s.remaining.toLocaleString("en-IN")}. Please pay before ${nextDueLabel(s.fee_due_day)}. Thank you.`;
-      const url = buildWhatsappUrl(s.mobile, msg)!;
-      // Stagger opens so popup blocker is friendlier
-      setTimeout(() => window.open(url, "_blank"), idx * 600);
-      await supabase.from("whatsapp_logs").insert({ student_id: s.id, message: msg, type: "reminder" });
-      idx++;
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkSending, setBulkSending] = useState(false);
+  const bulkPending = filtered.filter((s) => s.remaining > 0 && buildWhatsappUrl(s.mobile, "x"));
+
+  // Sequential queue: open + log one student, wait 700ms, repeat. No setTimeout that could
+  // fire after navigation. Toast progress so the user knows it's running.
+  const runBulkSend = async () => {
+    setBulkConfirmOpen(false);
+    setBulkSending(true);
+    let sent = 0;
+    const total = bulkPending.length;
+    const progressId = toast.loading(`Sending 0 / ${total}…`);
+    try {
+      for (const s of bulkPending) {
+        const msg = `Hello ${s.name}, your pending fees for Yashshree Classes is ${inr(s.remaining)}. Please pay before ${nextDueLabel(s.fee_due_day)}. Thank you.`;
+        const url = buildWhatsappUrl(s.mobile, msg);
+        if (!url) continue;
+        window.open(url, "_blank");
+        await supabase.from("whatsapp_logs").insert({ student_id: s.id, message: msg, type: "reminder" });
+        sent++;
+        toast.loading(`Sending ${sent} / ${total}…`, { id: progressId });
+        await new Promise((r) => setTimeout(r, 700));
+      }
+      await logAudit("whatsapp_broadcast", "whatsapp", null, { count: sent, type: "fee_reminder" });
+      toast.success(`Sent ${sent} reminder${sent === 1 ? "" : "s"}.`, { id: progressId });
+    } catch (e) {
+      toast.error(`Stopped after ${sent}: ${(e as Error).message}`, { id: progressId });
+    } finally {
+      setBulkSending(false);
     }
-    await logAudit("whatsapp_broadcast", "whatsapp", null, { count: pending.length, type: "fee_reminder" });
-    toast.success(`${pending.length} reminders queued.`);
+  };
+
+  const handleExport = async () => {
+    exportCSV(
+      ["Name", "Class", "Mobile", "Total", "Paid", "Remaining"],
+      filtered.map((s) => [s.name, s.class, s.mobile, s.total, s.paid, s.remaining]),
+      `fees_${format(new Date(), "yyyy-MM-dd")}.csv`,
+    );
+    await logAudit("export", "payment", null, { kind: "fees", rows: filtered.length });
   };
 
   const openPayment = (id: string) => { setPaymentStudentId(id); setPaymentDialogOpen(true); };
@@ -117,10 +142,47 @@ function FeesPage() {
           <h1 className="text-2xl font-bold font-display">Fees</h1>
           <Badge variant="outline" className="text-xs">AY {year}</Badge>
         </div>
-        <Button variant="outline" className="border-success text-success hover:bg-success/10 font-semibold" onClick={sendBulk}>
-          <Send className="h-4 w-4 mr-1" />Bulk Remind
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExport}
+            disabled={filtered.length === 0}
+            aria-label="Export fees to CSV"
+          >
+            <Download className="h-4 w-4 mr-1" />Export CSV
+          </Button>
+          <Button
+            variant="outline"
+            className="border-success text-success hover:bg-success/10 font-semibold"
+            onClick={() => {
+              if (bulkPending.length === 0) { toast.info("No pending fees with valid mobiles"); return; }
+              setBulkConfirmOpen(true);
+            }}
+            disabled={bulkSending}
+            aria-label="Send WhatsApp reminder to all pending students"
+          >
+            <Send className="h-4 w-4 mr-1" />{bulkSending ? "Sending…" : "Bulk Remind"}
+          </Button>
+        </div>
       </div>
+
+      <AlertDialog open={bulkConfirmOpen} onOpenChange={setBulkConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send {bulkPending.length} WhatsApp reminders?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will open a new WhatsApp tab for each student in sequence (one every ~700ms) and log the message in the audit trail. Allow popups for this site.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={runBulkSend} className="bg-success text-success-foreground hover:bg-success/90">
+              Send {bulkPending.length}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card><CardContent className="p-4">
@@ -129,11 +191,11 @@ function FeesPage() {
         </CardContent></Card>
         <Card><CardContent className="p-4">
           <p className="text-xs text-muted-foreground">Collected</p>
-          <p className="text-2xl font-bold text-success">₹{totalCollected.toLocaleString("en-IN")}</p>
+          <p className="text-2xl font-bold text-success">{inr(totalCollected)}</p>
         </CardContent></Card>
         <Card><CardContent className="p-4">
           <p className="text-xs text-muted-foreground">Pending</p>
-          <p className="text-2xl font-bold text-destructive">₹{totalPending.toLocaleString("en-IN")}</p>
+          <p className="text-2xl font-bold text-destructive">{inr(totalPending)}</p>
         </CardContent></Card>
       </div>
 
@@ -183,18 +245,18 @@ function FeesPage() {
                 <TableRow key={s.id} className="hover:bg-muted/50">
                   <TableCell className="font-medium">{s.name}</TableCell>
                   <TableCell className="text-xs">{s.class} • {(s as any).board} {s.medium}</TableCell>
-                  <TableCell className="text-right">₹{s.total.toLocaleString("en-IN")}</TableCell>
-                  <TableCell className="text-right text-success">₹{s.paid.toLocaleString("en-IN")}</TableCell>
+                  <TableCell className="text-right">{inr(s.total)}</TableCell>
+                  <TableCell className="text-right text-success">{inr(s.paid)}</TableCell>
                   <TableCell className={`text-right font-bold ${s.remaining > 0 ? "text-destructive" : "text-success"}`}>
-                    {s.remaining > 0 ? `₹${s.remaining.toLocaleString("en-IN")}` : "Paid ✓"}
+                    {s.remaining > 0 ? inr(s.remaining) : "Paid ✓"}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openPayment(s.id)} title="Add payment">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openPayment(s.id)} aria-label={`Add payment for ${s.name}`} title="Add payment">
                         <IndianRupee className="h-4 w-4 text-secondary-foreground" />
                       </Button>
                       {s.remaining > 0 && (
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => sendReminder(s)} title="Send reminder">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => sendReminder(s)} aria-label={`Send WhatsApp reminder to ${s.name}`} title="Send reminder">
                           <MessageCircle className="h-4 w-4 text-success" />
                         </Button>
                       )}
@@ -234,15 +296,11 @@ function PaymentForm({ studentId, studentName, remaining, defaultYear, onSuccess
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [mode, setMode] = useState("cash");
   const [notes, setNotes] = useState("");
+  const [overConfirmOpen, setOverConfirmOpen] = useState(false);
 
-  const mutation = useMutation({
+  const recordPayment = useMutation({
     mutationFn: async () => {
       const amt = safeNum(amount);
-      if (amt <= 0) throw new Error("Amount must be greater than 0");
-      if (remaining > 0 && amt > remaining) {
-        const ok = window.confirm(`Amount ₹${amt.toLocaleString("en-IN")} exceeds remaining ₹${remaining.toLocaleString("en-IN")}. Record anyway?`);
-        if (!ok) throw new Error("Cancelled");
-      }
       const ay = deriveAcademicYear(date) || defaultYear;
       const { data: ins, error } = await supabase.from("payments").insert({
         student_id: studentId,
@@ -254,11 +312,21 @@ function PaymentForm({ studentId, studentName, remaining, defaultYear, onSuccess
       }).select("id").single();
       if (error) throw error;
       await logAudit("payment_recorded", "payment", ins?.id ?? null, { student_id: studentId, student_name: studentName, amount: amt, mode, date });
-      return { amt, date, mode, notes };
     },
     onSuccess: () => { toast.success("Payment recorded"); onSuccess(); },
-    onError: (e) => { if (e.message !== "Cancelled") toast.error(e.message); },
+    onError: (e) => toast.error(e.message),
   });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = safeNum(amount);
+    if (amt <= 0) { toast.error("Amount must be greater than 0"); return; }
+    if (remaining > 0 && amt > remaining) {
+      setOverConfirmOpen(true);
+      return;
+    }
+    recordPayment.mutate();
+  };
 
   const printReceipt = () => {
     const win = window.open("", "_blank", "width=400,height=600");
@@ -286,30 +354,49 @@ function PaymentForm({ studentId, studentName, remaining, defaultYear, onSuccess
   };
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); mutation.mutate(); }} className="space-y-3">
-      {remaining > 0 && (
-        <p className="text-xs text-muted-foreground">Remaining: <span className="font-semibold text-destructive">₹{remaining.toLocaleString("en-IN")}</span></p>
-      )}
-      <div className="space-y-1.5"><Label>Amount (₹)</Label><Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required min={1} step="0.01" /></div>
-      <div className="space-y-1.5"><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
-      <div className="space-y-1.5">
-        <Label>Mode</Label>
-        <Select value={mode} onValueChange={setMode}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="cash">Cash</SelectItem>
-            <SelectItem value="upi">UPI</SelectItem>
-            <SelectItem value="bank">Bank</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="space-y-1.5"><Label>Notes</Label><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
-      <div className="flex gap-2">
-        <Button type="submit" className="flex-1 bg-secondary text-secondary-foreground hover:bg-secondary/90" disabled={mutation.isPending}>
-          {mutation.isPending ? "Saving..." : "Record Payment"}
-        </Button>
-        <Button type="button" variant="outline" onClick={printReceipt} disabled={!amount}>Print</Button>
-      </div>
-    </form>
+    <>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        {remaining > 0 && (
+          <p className="text-xs text-muted-foreground">Remaining: <span className="font-semibold text-destructive">{inr(remaining)}</span></p>
+        )}
+        <div className="space-y-1.5"><Label>Amount (₹)</Label><Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required min={1} step="0.01" /></div>
+        <div className="space-y-1.5"><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+        <div className="space-y-1.5">
+          <Label>Mode</Label>
+          <Select value={mode} onValueChange={setMode}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="cash">Cash</SelectItem>
+              <SelectItem value="upi">UPI</SelectItem>
+              <SelectItem value="bank">Bank</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5"><Label>Notes</Label><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+        <div className="flex gap-2">
+          <Button type="submit" className="flex-1 bg-secondary text-secondary-foreground hover:bg-secondary/90" disabled={recordPayment.isPending}>
+            {recordPayment.isPending ? "Saving..." : "Record Payment"}
+          </Button>
+          <Button type="button" variant="outline" onClick={printReceipt} disabled={!amount}>Print</Button>
+        </div>
+      </form>
+
+      <AlertDialog open={overConfirmOpen} onOpenChange={setOverConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Amount exceeds remaining</AlertDialogTitle>
+            <AlertDialogDescription>
+              {inr(safeNum(amount))} is more than the remaining balance of {inr(remaining)}. Record the payment anyway?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setOverConfirmOpen(false); recordPayment.mutate(); }}>
+              Yes, record it
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

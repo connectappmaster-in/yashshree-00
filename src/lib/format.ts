@@ -24,6 +24,9 @@ export function inr(n: number): string {
   return `₹${(safeNum(n)).toLocaleString("en-IN")}`;
 }
 
+/** Alias for inr() — preferred name going forward. */
+export const formatINR = inr;
+
 /** Compute the next due-date description based on day-of-month. */
 export function nextDueLabel(dueDay: number): string {
   const today = new Date();

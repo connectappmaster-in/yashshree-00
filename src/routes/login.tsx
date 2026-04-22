@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useRef, type FormEvent } from "react";
+import { z } from "zod";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { logAudit } from "@/lib/audit";
@@ -9,19 +10,32 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { GraduationCap, BookOpen, Award, Star } from "lucide-react";
 
+const loginSearchSchema = z.object({
+  redirect: z.string().optional(),
+});
+
 export const Route = createFileRoute("/login")({
   ssr: false,
+  validateSearch: loginSearchSchema,
   component: LoginPage,
 });
 
 function LoginPage() {
   const { login, isAuthenticated, isReady, role, isAdmin, isTeacher } = useAuth();
   const navigate = useNavigate();
+  const search = Route.useSearch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const greeted = useRef(false);
+
+  // Sanitize redirect: must be a relative path starting with `/` and not `//`
+  const safeRedirect = (() => {
+    const r = search.redirect;
+    if (typeof r !== "string" || !r.startsWith("/") || r.startsWith("//")) return "/dashboard";
+    return r;
+  })();
 
   useEffect(() => {
     if (isReady && isAuthenticated) {
@@ -30,9 +44,9 @@ function LoginPage() {
         toast.success(isAdmin ? "Welcome admin" : isTeacher ? "Welcome teacher" : "Welcome");
         logAudit("login", "auth", null, { role });
       }
-      navigate({ to: "/dashboard" });
+      navigate({ to: safeRedirect });
     }
-  }, [isReady, isAuthenticated, role, isAdmin, isTeacher, navigate]);
+  }, [isReady, isAuthenticated, role, isAdmin, isTeacher, navigate, safeRedirect]);
 
   // Render a blank shell until we know auth state, or if user is already logged in (preventing flash)
   if (!isReady || isAuthenticated) {
@@ -45,13 +59,12 @@ function LoginPage() {
     setLoading(true);
     try {
       const result = await login(email, password);
-      if (result.success) {
-        navigate({ to: "/dashboard" });
-      } else {
+      if (!result.success) {
         setError(result.error || "Invalid credentials");
         // Best-effort: log failed attempt (no session yet, attach attempted email)
         await logAudit("login_failed", "auth", null, { email }, { id: null, email });
       }
+      // On success, the auth-state effect above will navigate — no double-navigate here
     } catch {
       setError("Something went wrong. Try again.");
       await logAudit("login_failed", "auth", null, { email, error: "exception" }, { id: null, email });
