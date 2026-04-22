@@ -16,6 +16,7 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAcademicYear } from "@/lib/academic-year-context";
+import { logAudit } from "@/lib/audit";
 
 export const Route = createFileRoute("/_authenticated/tests")({
   component: TestsPage,
@@ -59,9 +60,11 @@ function TestsPage() {
 
   const deleteTestMut = useMutation({
     mutationFn: async (id: string) => {
+      const target = tests.find((t) => t.id === id);
       // test_results cascade-delete via FK; just remove the test
       const { error } = await supabase.from("tests").delete().eq("id", id);
       if (error) throw error;
+      await logAudit("delete", "test", id, { name: target?.name, standard: target?.standard, subject: target?.subject });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tests"] });
@@ -236,6 +239,11 @@ function MarksEntryTable({ test, students, results, onSaved }: { test: Tables<"t
         const { error } = await supabase.from("test_results").delete().eq("test_id", test.id).in("student_id", toDelete);
         if (error) throw error;
       }
+      await logAudit("test_marks_saved", "test_result", test.id, {
+        test_name: test.name,
+        saved: toUpsert.length,
+        cleared: toDelete.length,
+      });
     },
     onSuccess: () => { toast.success("Marks saved"); setMarks({}); onSaved(); },
     onError: (e) => { if (e.message !== "Cancelled") toast.error(e.message); },
@@ -310,9 +318,11 @@ function TestForm({ test, defaultYear, onSuccess }: { test: Tables<"tests"> | nu
       if (test) {
         const { error } = await supabase.from("tests").update(payload).eq("id", test.id);
         if (error) throw error;
+        await logAudit("update", "test", test.id, payload);
       } else {
-        const { error } = await supabase.from("tests").insert(payload);
+        const { data: ins, error } = await supabase.from("tests").insert(payload).select("id").single();
         if (error) throw error;
+        await logAudit("create", "test", ins?.id ?? null, payload);
       }
     },
     onSuccess: () => { toast.success(test ? "Updated" : "Created"); onSuccess(); },

@@ -19,6 +19,7 @@ import { format, startOfMonth, endOfMonth } from "date-fns";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAcademicYear, deriveAcademicYear } from "@/lib/academic-year-context";
 import { AdminGuard } from "@/components/AdminGuard";
+import { logAudit } from "@/lib/audit";
 
 export const Route = createFileRoute("/_authenticated/teachers")({
   component: () => <AdminGuard><TeachersPage /></AdminGuard>,
@@ -64,8 +65,10 @@ function TeachersPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
+      const target = teachers.find((t) => t.id === id);
       const { error } = await supabase.from("teachers").delete().eq("id", id);
       if (error) throw error;
+      await logAudit("delete", "teacher", id, { name: target?.name, subject: target?.subject });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["teachers"] });
@@ -239,6 +242,7 @@ function TeacherAttendanceView({ teachers, attRecords, year }: { teachers: Table
         const { error } = await supabase.from("teacher_attendance").upsert(r, { onConflict: "teacher_id,date" });
         if (error) throw error;
       }
+      await logAudit("attendance_marked", "teacher_attendance", null, { date, count: recs.length });
       return recs.length;
     },
     onSuccess: (count) => {
@@ -308,9 +312,11 @@ function TeacherForm({ teacher, onSuccess }: { teacher: Tables<"teachers"> | nul
       if (teacher) {
         const { error } = await supabase.from("teachers").update(payload).eq("id", teacher.id);
         if (error) throw error;
+        await logAudit("update", "teacher", teacher.id, payload);
       } else {
-        const { error } = await supabase.from("teachers").insert(payload);
+        const { data: ins, error } = await supabase.from("teachers").insert(payload).select("id").single();
         if (error) throw error;
+        await logAudit("create", "teacher", ins?.id ?? null, payload);
       }
     },
     onSuccess: () => { toast.success(teacher ? "Updated" : "Added"); onSuccess(); },
@@ -364,14 +370,15 @@ function LectureForm({ teacherId, teachers, defaultYear, onSuccess }: { teacherI
           throw new Error("Cancelled");
         }
       }
-      const { error } = await supabase.from("lectures").insert({
+      const { data: ins, error } = await supabase.from("lectures").insert({
         teacher_id: teacherId,
         date,
         subject: subj,
         batch,
         academic_year: ay,
-      });
+      }).select("id").single();
       if (error) throw error;
+      await logAudit("lecture_logged", "lecture", ins?.id ?? null, { teacher_id: teacherId, date, subject: subj, batch });
     },
     onSuccess: () => { toast.success("Lecture logged"); onSuccess(); },
     onError: (e) => { if (e.message !== "Cancelled") toast.error(e.message); },

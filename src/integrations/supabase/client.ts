@@ -13,5 +13,6 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storage: typeof window !== "undefined" ? window.localStorage : undefined,
     persistSession: typeof window !== "undefined",
     autoRefreshToken: typeof window !== "undefined",
+    detectSessionInUrl: typeof window !== "undefined",
   }
 });

@@ -18,6 +18,7 @@ import { useAcademicYear } from "@/lib/academic-year-context";
 import { exportCSV, exportExcel, exportPDF } from "@/lib/export-utils";
 import { safeNum, buildWhatsappUrl } from "@/lib/format";
 import { AdminGuard } from "@/components/AdminGuard";
+import { logAudit } from "@/lib/audit";
 
 export const Route = createFileRoute("/_authenticated/reports")({
   component: () => <AdminGuard><ReportsPage /></AdminGuard>,
@@ -123,9 +124,9 @@ function ReportsPage() {
   });
 
   const exportAll = (title: string, headers: string[], rows: (string | number)[][], filename: string) => ({
-    csv: () => exportCSV(headers, rows, `${filename}.csv`),
-    xlsx: () => exportExcel(headers, rows, `${filename}.xlsx`),
-    pdf: () => exportPDF(title, headers, rows, `${filename}.pdf`),
+    csv: () => { exportCSV(headers, rows, `${filename}.csv`); logAudit("export", "report", null, { kind: filename, format: "csv", rows: rows.length }); },
+    xlsx: () => { exportExcel(headers, rows, `${filename}.xlsx`); logAudit("export", "report", null, { kind: filename, format: "xlsx", rows: rows.length }); },
+    pdf: () => { exportPDF(title, headers, rows, `${filename}.pdf`); logAudit("export", "report", null, { kind: filename, format: "pdf", rows: rows.length }); },
   });
 
   const ExportButtons = ({ exporters }: { exporters: ReturnType<typeof exportAll> }) => (

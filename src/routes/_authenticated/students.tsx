@@ -19,6 +19,9 @@ import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAcademicYear, deriveAcademicYear } from "@/lib/academic-year-context";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { safeNum } from "@/lib/format";
+import { logAudit } from "@/lib/audit";
+
+const CLASS_RANK: Record<string, number> = { "5th": 5, "6th": 6, "7th": 7, "8th": 8, "9th": 9, "10th": 10, "11th": 11, "12th": 12 };
 
 export const Route = createFileRoute("/_authenticated/students")({
   component: StudentsPage,
@@ -100,8 +103,10 @@ function StudentsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
+      const target = students.find((s) => s.id === id);
       const { error } = await supabase.from("students").delete().eq("id", id);
       if (error) throw error;
+      await logAudit("delete", "student", id, { name: target?.name, class: target?.class });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["students"] });
@@ -120,6 +125,10 @@ function StudentsPage() {
     const paid = sp.reduce((sum, p) => sum + safeNum(p.amount), 0);
     const total = safeNum(s.total_fees) - safeNum(s.discount);
     return { ...s, paid, total, remaining: total - paid, studentPayments: sp };
+  }).sort((a, b) => {
+    const ra = CLASS_RANK[a.class] ?? 99;
+    const rb = CLASS_RANK[b.class] ?? 99;
+    return ra - rb || a.name.localeCompare(b.name);
   });
 
   const filtered = studentSummary.filter((s) => {
@@ -297,7 +306,11 @@ function StudentsPage() {
                         const next = selected.status === "active" ? "inactive" : "active";
                         const { error } = await supabase.from("students").update({ status: next }).eq("id", selected.id);
                         if (error) toast.error(error.message);
-                        else { toast.success(`Marked ${next}`); queryClient.invalidateQueries({ queryKey: ["students"] }); }
+                        else {
+                          toast.success(`Marked ${next}`);
+                          await logAudit("status_changed", "student", selected.id, { name: selected.name, from: selected.status, to: next });
+                          queryClient.invalidateQueries({ queryKey: ["students"] });
+                        }
                       }}>{selected.status === "active" ? "Mark inactive" : "Mark active"}</Button>
                     </p>
                     <p><span className="text-muted-foreground">Academic Year:</span> {selected.academic_year}</p>
@@ -512,9 +525,11 @@ function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"stu
       if (student) {
         const { error } = await supabase.from("students").update(payload).eq("id", student.id);
         if (error) throw error;
+        await logAudit("update", "student", student.id, { name: payload.name, class: payload.class });
       } else {
-        const { error } = await supabase.from("students").insert(payload);
+        const { data: ins, error } = await supabase.from("students").insert(payload).select("id").single();
         if (error) throw error;
+        await logAudit("create", "student", ins?.id ?? null, { name: payload.name, class: payload.class });
       }
     },
     onSuccess: () => {
@@ -615,15 +630,16 @@ function PaymentForm({ studentId, defaultYear, remaining, onSuccess }: { student
       const amt = safeNum(amount);
       if (amt <= 0) throw new Error("Amount must be greater than 0");
       const ay = deriveAcademicYear(date) || defaultYear;
-      const { error } = await supabase.from("payments").insert({
+      const { data: ins, error } = await supabase.from("payments").insert({
         student_id: studentId,
         amount: amt,
         payment_date: date,
         payment_mode: mode,
         notes: notes || null,
         academic_year: ay,
-      });
+      }).select("id").single();
       if (error) throw error;
+      await logAudit("payment_recorded", "payment", ins?.id ?? null, { student_id: studentId, amount: amt, mode, date });
     },
     onSuccess: () => { toast.success("Payment recorded"); onSuccess(); },
     onError: (e) => toast.error(e.message),

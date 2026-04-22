@@ -17,6 +17,7 @@ import { format } from "date-fns";
 import { useAcademicYear, deriveAcademicYear } from "@/lib/academic-year-context";
 import { safeNum, buildWhatsappUrl, nextDueLabel } from "@/lib/format";
 import { AdminGuard } from "@/components/AdminGuard";
+import { logAudit } from "@/lib/audit";
 
 export const Route = createFileRoute("/_authenticated/fees")({
   component: () => <AdminGuard><FeesPage /></AdminGuard>,
@@ -82,6 +83,7 @@ function FeesPage() {
     if (!url) { toast.error(`Invalid mobile for ${s.name}`); return; }
     window.open(url, "_blank");
     await supabase.from("whatsapp_logs").insert({ student_id: s.id, message: msg, type: "reminder" });
+    await logAudit("whatsapp_sent", "whatsapp", s.id, { type: "reminder", remaining: s.remaining });
     toast.success(`Reminder sent to ${s.name}`);
   };
 
@@ -102,6 +104,7 @@ function FeesPage() {
       await supabase.from("whatsapp_logs").insert({ student_id: s.id, message: msg, type: "reminder" });
       idx++;
     }
+    await logAudit("whatsapp_broadcast", "whatsapp", null, { count: pending.length, type: "fee_reminder" });
     toast.success(`${pending.length} reminders queued.`);
   };
 
@@ -241,15 +244,16 @@ function PaymentForm({ studentId, studentName, remaining, defaultYear, onSuccess
         if (!ok) throw new Error("Cancelled");
       }
       const ay = deriveAcademicYear(date) || defaultYear;
-      const { error } = await supabase.from("payments").insert({
+      const { data: ins, error } = await supabase.from("payments").insert({
         student_id: studentId,
         amount: amt,
         payment_date: date,
         payment_mode: mode,
         notes: notes || null,
         academic_year: ay,
-      });
+      }).select("id").single();
       if (error) throw error;
+      await logAudit("payment_recorded", "payment", ins?.id ?? null, { student_id: studentId, student_name: studentName, amount: amt, mode, date });
       return { amt, date, mode, notes };
     },
     onSuccess: () => { toast.success("Payment recorded"); onSuccess(); },

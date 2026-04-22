@@ -1,6 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, type FormEvent } from "react";
+import { useState, useEffect, useRef, type FormEvent } from "react";
+import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
+import { logAudit } from "@/lib/audit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,18 +15,24 @@ export const Route = createFileRoute("/login")({
 });
 
 function LoginPage() {
-  const { login, isAuthenticated, isReady } = useAuth();
+  const { login, isAuthenticated, isReady, role, isAdmin, isTeacher } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const greeted = useRef(false);
 
   useEffect(() => {
     if (isReady && isAuthenticated) {
+      if (!greeted.current && role) {
+        greeted.current = true;
+        toast.success(isAdmin ? "Welcome admin" : isTeacher ? "Welcome teacher" : "Welcome");
+        logAudit("login", "auth", null, { role });
+      }
       navigate({ to: "/dashboard" });
     }
-  }, [isReady, isAuthenticated, navigate]);
+  }, [isReady, isAuthenticated, role, isAdmin, isTeacher, navigate]);
 
   // Render a blank shell until we know auth state, or if user is already logged in (preventing flash)
   if (!isReady || isAuthenticated) {
@@ -41,9 +49,12 @@ function LoginPage() {
         navigate({ to: "/dashboard" });
       } else {
         setError(result.error || "Invalid credentials");
+        // Best-effort: log failed attempt (no session yet, attach attempted email)
+        await logAudit("login_failed", "auth", null, { email }, { id: null, email });
       }
     } catch {
       setError("Something went wrong. Try again.");
+      await logAudit("login_failed", "auth", null, { email, error: "exception" }, { id: null, email });
     } finally {
       setLoading(false);
     }

@@ -3,6 +3,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { useAcademicYear, ACADEMIC_YEARS } from "@/lib/academic-year-context";
 import { useTheme } from "@/lib/theme-context";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   LayoutDashboard,
   Users,
@@ -19,6 +20,9 @@ import {
   User,
   MessageCircle,
   UserCog,
+  ScrollText,
+  Settings,
+  ChevronDown,
 } from "lucide-react";
 import { useState } from "react";
 import {
@@ -39,9 +43,13 @@ const navItems: NavItem[] = [
   { title: "Attendance", url: "/attendance", icon: CalendarCheck },
   { title: "Test Reports", url: "/tests", icon: ClipboardList },
   { title: "Teachers", url: "/teachers", icon: GraduationCap, adminOnly: true },
-  { title: "Reports", url: "/reports", icon: BarChart3, adminOnly: true },
   { title: "WhatsApp", url: "/whatsapp-logs", icon: MessageCircle, adminOnly: true },
+];
+
+const settingsItems: NavItem[] = [
+  { title: "Reports", url: "/reports", icon: BarChart3, adminOnly: true },
   { title: "Users", url: "/users", icon: UserCog, adminOnly: true },
+  { title: "Audit", url: "/audit", icon: ScrollText, adminOnly: true },
 ];
 
 export function AdminTopNav() {
@@ -57,16 +65,18 @@ export function AdminTopNav() {
     return location.pathname.startsWith(url);
   };
 
+  const isSettingsActive = settingsItems.some((i) => isActive(i.url));
+
   return (
     <>
       <nav className="bg-primary text-primary-foreground sticky top-0 z-50 shadow-lg">
-        <div className="flex items-center justify-between h-14 px-4">
+        <div className="flex items-center justify-between h-14 px-4 gap-2">
           <Link to="/dashboard" className="flex items-center gap-2 font-display font-bold text-lg shrink-0">
             <GraduationCap className="h-6 w-6 text-secondary" />
             <span className="hidden sm:inline">Yashshree Classes</span>
           </Link>
 
-          <div className="hidden lg:flex items-center gap-0.5 overflow-x-auto">
+          <div className="hidden xl:flex items-center gap-0.5 min-w-0 flex-1 justify-center">
             {visibleNavItems.map((item) => (
               <Link
                 key={item.url}
@@ -84,26 +94,62 @@ export function AdminTopNav() {
                 )}
               </Link>
             ))}
+
+            {isAdmin && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className={`flex items-center gap-1.5 px-2.5 py-2 text-sm font-medium rounded-md transition-colors relative whitespace-nowrap ${
+                      isSettingsActive
+                        ? "text-secondary"
+                        : "text-primary-foreground/80 hover:text-primary-foreground hover:bg-primary-foreground/10"
+                    }`}
+                  >
+                    <Settings className="h-4 w-4" />
+                    <span>Settings</span>
+                    <ChevronDown className="h-3 w-3 opacity-70" />
+                    {isSettingsActive && (
+                      <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-secondary rounded-full" />
+                    )}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  {settingsItems.map((item) => (
+                    <DropdownMenuItem key={item.url} asChild className="cursor-pointer">
+                      <Link to={item.url}>
+                        <item.icon className="h-4 w-4 mr-2" />
+                        {item.title}
+                      </Link>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Year dropdown lives in topbar from lg+ to avoid duplication with mobile menu */}
-            <select
-              value={year}
-              onChange={(e) => setYear(e.target.value)}
-              className="hidden lg:block bg-primary-foreground/10 text-primary-foreground text-xs font-medium rounded-md px-2 py-1.5 border border-primary-foreground/20 focus:outline-none focus:ring-1 focus:ring-secondary"
-              title="Academic Year"
-            >
-              {ACADEMIC_YEARS.map((y) => (
-                <option key={y} value={y} className="bg-primary text-primary-foreground">{y}</option>
-              ))}
-            </select>
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="hidden xl:block">
+              <Select value={year} onValueChange={setYear}>
+                <SelectTrigger
+                  className="h-8 w-[110px] bg-primary-foreground/10 text-primary-foreground border-primary-foreground/20 text-xs font-medium focus:ring-1 focus:ring-secondary"
+                  aria-label="Academic Year"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ACADEMIC_YEARS.map((y) => (
+                    <SelectItem key={y} value={y}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <Button
               variant="ghost"
               size="icon"
               className="h-8 w-8 text-primary-foreground/80 hover:text-primary-foreground hover:bg-primary-foreground/10"
               onClick={toggleTheme}
               title="Toggle theme"
+              aria-label="Toggle theme"
             >
               {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
@@ -138,8 +184,9 @@ export function AdminTopNav() {
             <Button
               variant="ghost"
               size="icon"
-              className="lg:hidden text-primary-foreground"
+              className="xl:hidden text-primary-foreground"
               onClick={() => setMobileOpen(!mobileOpen)}
+              aria-label="Toggle menu"
             >
               {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </Button>
@@ -147,7 +194,7 @@ export function AdminTopNav() {
         </div>
 
         {mobileOpen && (
-          <div className="lg:hidden border-t border-primary-foreground/10 pb-2 animate-fade-in">
+          <div className="xl:hidden border-t border-primary-foreground/10 pb-2 animate-fade-in">
             {visibleNavItems.map((item) => (
               <Link
                 key={item.url}
@@ -163,16 +210,41 @@ export function AdminTopNav() {
                 <span>{item.title}</span>
               </Link>
             ))}
-            <div className="px-4 py-2">
-              <select
-                value={year}
-                onChange={(e) => setYear(e.target.value)}
-                className="w-full bg-primary-foreground/10 text-primary-foreground text-xs font-medium rounded-md px-2 py-1.5 border border-primary-foreground/20"
-              >
-                {ACADEMIC_YEARS.map((y) => (
-                  <option key={y} value={y} className="bg-primary text-primary-foreground">{y}</option>
+
+            {isAdmin && (
+              <>
+                <div className="px-4 pt-3 pb-1 text-[11px] uppercase tracking-wider text-primary-foreground/60 font-semibold">
+                  Settings
+                </div>
+                {settingsItems.map((item) => (
+                  <Link
+                    key={item.url}
+                    to={item.url}
+                    onClick={() => setMobileOpen(false)}
+                    className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+                      isActive(item.url)
+                        ? "text-secondary bg-primary-foreground/5"
+                        : "text-primary-foreground/80 hover:text-primary-foreground hover:bg-primary-foreground/5"
+                    }`}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    <span>{item.title}</span>
+                  </Link>
                 ))}
-              </select>
+              </>
+            )}
+
+            <div className="px-4 py-2">
+              <Select value={year} onValueChange={setYear}>
+                <SelectTrigger className="h-8 w-full bg-primary-foreground/10 text-primary-foreground border-primary-foreground/20 text-xs font-medium" aria-label="Academic Year">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ACADEMIC_YEARS.map((y) => (
+                    <SelectItem key={y} value={y}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         )}

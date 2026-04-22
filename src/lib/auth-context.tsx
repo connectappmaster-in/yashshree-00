@@ -108,6 +108,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    // Capture identity before sign-out so the audit row has user_email
+    const { data: { user: cur } } = await supabase.auth.getUser();
+    if (cur) {
+      try {
+        await supabase.from("audit_logs").insert({
+          user_id: cur.id,
+          user_email: cur.email ?? null,
+          action: "logout",
+          entity: "auth",
+          entity_id: null,
+          details: {} as never,
+        });
+      } catch {
+        // ignore
+      }
+    }
     await supabase.auth.signOut();
     setUser(null);
     setRole(null);
