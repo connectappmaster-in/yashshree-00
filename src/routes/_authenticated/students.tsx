@@ -13,13 +13,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Pencil, Trash2, Search, IndianRupee, MessageCircle } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, IndianRupee, MessageCircle, Download } from "lucide-react";
 import { format } from "date-fns";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAcademicYear, deriveAcademicYear } from "@/lib/academic-year-context";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { safeNum } from "@/lib/format";
+import { safeNum, inr } from "@/lib/format";
 import { logAudit } from "@/lib/audit";
+import { exportCSV } from "@/lib/export-utils";
 
 const CLASS_RANK: Record<string, number> = { "5th": 5, "6th": 6, "7th": 7, "8th": 8, "9th": 9, "10th": 10, "11th": 11, "12th": 12 };
 
@@ -143,6 +144,18 @@ function StudentsPage() {
 
   const selected = selectedId ? studentSummary.find((s) => s.id === selectedId) : null;
 
+  const handleExport = async () => {
+    exportCSV(
+      ["Name", "Mobile", "Class", "Board", "Medium", "Batch", "Total Fees", "Discount", "Paid", "Remaining", "Status"],
+      filtered.map((s) => [
+        s.name, s.mobile, s.class, (s as any).board ?? "", s.medium, s.batch,
+        safeNum(s.total_fees), safeNum(s.discount), s.paid, s.remaining, s.status,
+      ]),
+      `students_${format(new Date(), "yyyy-MM-dd")}.csv`,
+    );
+    await logAudit("export", "student", null, { kind: "students", rows: filtered.length });
+  };
+
   return (
     <div className="animate-fade-in">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
@@ -151,27 +164,32 @@ function StudentsPage() {
           <Badge variant="secondary" className="text-xs">{filtered.length}</Badge>
           <Badge variant="outline" className="text-xs">AY {year}</Badge>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setEditStudent(null); }}>
-          <DialogTrigger asChild>
-            <Button className="bg-secondary text-secondary-foreground hover:bg-secondary/90 font-semibold">
-              <Plus className="h-4 w-4 mr-1" />Add Student
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="font-display">{editStudent ? "Edit Student" : "Add New Student"}</DialogTitle>
-            </DialogHeader>
-            <StudentForm
-              student={editStudent}
-              defaultYear={year}
-              onSuccess={() => {
-                setDialogOpen(false);
-                setEditStudent(null);
-                queryClient.invalidateQueries({ queryKey: ["students"] });
-              }}
-            />
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleExport} disabled={filtered.length === 0} aria-label="Export students to CSV">
+            <Download className="h-4 w-4 mr-1" />Export CSV
+          </Button>
+          <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setEditStudent(null); }}>
+            <DialogTrigger asChild>
+              <Button className="bg-secondary text-secondary-foreground hover:bg-secondary/90 font-semibold">
+                <Plus className="h-4 w-4 mr-1" />Add Student
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="font-display">{editStudent ? "Edit Student" : "Add New Student"}</DialogTitle>
+              </DialogHeader>
+              <StudentForm
+                student={editStudent}
+                defaultYear={year}
+                onSuccess={() => {
+                  setDialogOpen(false);
+                  setEditStudent(null);
+                  queryClient.invalidateQueries({ queryKey: ["students"] });
+                }}
+              />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-4">
@@ -650,7 +668,7 @@ function PaymentForm({ studentId, defaultYear, remaining, onSuccess }: { student
     const amt = safeNum(amount);
     if (amt <= 0) { toast.error("Enter a valid amount"); return; }
     if (remaining > 0 && amt > remaining) {
-      if (!window.confirm(`Amount ₹${amt.toLocaleString("en-IN")} is more than remaining ₹${remaining.toLocaleString("en-IN")}. Proceed anyway?`)) return;
+      if (!window.confirm(`Amount ${inr(amt)} is more than remaining ${inr(remaining)}. Proceed anyway?`)) return;
     }
     mutation.mutate();
   };
@@ -660,7 +678,7 @@ function PaymentForm({ studentId, defaultYear, remaining, onSuccess }: { student
       <div className="space-y-1.5">
         <Label>Amount (₹)</Label>
         <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required min={1} step="0.01" />
-        {remaining > 0 && <p className="text-xs text-muted-foreground">Remaining: ₹{remaining.toLocaleString("en-IN")}</p>}
+        {remaining > 0 && <p className="text-xs text-muted-foreground">Remaining: {inr(remaining)}</p>}
       </div>
       <div className="space-y-1.5"><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
       <div className="space-y-1.5">
