@@ -9,15 +9,20 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Search, MessageCircle, IndianRupee, Send } from "lucide-react";
+import { Search, MessageCircle, IndianRupee, Send, Download } from "lucide-react";
 import { format } from "date-fns";
 import { useAcademicYear, deriveAcademicYear } from "@/lib/academic-year-context";
-import { safeNum, buildWhatsappUrl, nextDueLabel } from "@/lib/format";
+import { safeNum, buildWhatsappUrl, nextDueLabel, inr } from "@/lib/format";
 import { AdminGuard } from "@/components/AdminGuard";
 import { logAudit } from "@/lib/audit";
+import { exportCSV } from "@/lib/export-utils";
 
 export const Route = createFileRoute("/_authenticated/fees")({
   component: () => <AdminGuard><FeesPage /></AdminGuard>,
@@ -78,7 +83,7 @@ function FeesPage() {
   const totalCollected = ayPayments.reduce((sum, p) => sum + safeNum(p.amount), 0);
 
   const sendReminder = async (s: typeof studentFees[0]) => {
-    const msg = `Hello ${s.name}, your pending fees for Yashshree Classes is ₹${s.remaining.toLocaleString("en-IN")}. Please pay before ${nextDueLabel(s.fee_due_day)}. Thank you.`;
+    const msg = `Hello ${s.name}, your pending fees for Yashshree Classes is ${inr(s.remaining)}. Please pay before ${nextDueLabel(s.fee_due_day)}. Thank you.`;
     const url = buildWhatsappUrl(s.mobile, msg);
     if (!url) { toast.error(`Invalid mobile for ${s.name}`); return; }
     window.open(url, "_blank");
@@ -87,25 +92,45 @@ function FeesPage() {
     toast.success(`Reminder sent to ${s.name}`);
   };
 
-  // Bulk: log every reminder, open one tab at a time with a 600ms delay so the browser doesn't block popups.
-  const sendBulk = async () => {
-    const pending = filtered.filter((s) => s.remaining > 0 && buildWhatsappUrl(s.mobile, "x"));
-    if (pending.length === 0) { toast.info("No pending fees with valid mobiles"); return; }
-    const confirmed = window.confirm(
-      `This will log ${pending.length} WhatsApp reminders and open ${pending.length} tabs (one per student). Your browser may block tabs after the first — allow popups for this site. Continue?`
-    );
-    if (!confirmed) return;
-    let idx = 0;
-    for (const s of pending) {
-      const msg = `Hello ${s.name}, your pending fees for Yashshree Classes is ₹${s.remaining.toLocaleString("en-IN")}. Please pay before ${nextDueLabel(s.fee_due_day)}. Thank you.`;
-      const url = buildWhatsappUrl(s.mobile, msg)!;
-      // Stagger opens so popup blocker is friendlier
-      setTimeout(() => window.open(url, "_blank"), idx * 600);
-      await supabase.from("whatsapp_logs").insert({ student_id: s.id, message: msg, type: "reminder" });
-      idx++;
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkSending, setBulkSending] = useState(false);
+  const bulkPending = filtered.filter((s) => s.remaining > 0 && buildWhatsappUrl(s.mobile, "x"));
+
+  // Sequential queue: open + log one student, wait 700ms, repeat. No setTimeout that could
+  // fire after navigation. Toast progress so the user knows it's running.
+  const runBulkSend = async () => {
+    setBulkConfirmOpen(false);
+    setBulkSending(true);
+    let sent = 0;
+    const total = bulkPending.length;
+    const progressId = toast.loading(`Sending 0 / ${total}…`);
+    try {
+      for (const s of bulkPending) {
+        const msg = `Hello ${s.name}, your pending fees for Yashshree Classes is ${inr(s.remaining)}. Please pay before ${nextDueLabel(s.fee_due_day)}. Thank you.`;
+        const url = buildWhatsappUrl(s.mobile, msg);
+        if (!url) continue;
+        window.open(url, "_blank");
+        await supabase.from("whatsapp_logs").insert({ student_id: s.id, message: msg, type: "reminder" });
+        sent++;
+        toast.loading(`Sending ${sent} / ${total}…`, { id: progressId });
+        await new Promise((r) => setTimeout(r, 700));
+      }
+      await logAudit("whatsapp_broadcast", "whatsapp", null, { count: sent, type: "fee_reminder" });
+      toast.success(`Sent ${sent} reminder${sent === 1 ? "" : "s"}.`, { id: progressId });
+    } catch (e) {
+      toast.error(`Stopped after ${sent}: ${(e as Error).message}`, { id: progressId });
+    } finally {
+      setBulkSending(false);
     }
-    await logAudit("whatsapp_broadcast", "whatsapp", null, { count: pending.length, type: "fee_reminder" });
-    toast.success(`${pending.length} reminders queued.`);
+  };
+
+  const handleExport = async () => {
+    exportCSV(
+      ["Name", "Class", "Mobile", "Total", "Paid", "Remaining"],
+      filtered.map((s) => [s.name, s.class, s.mobile, s.total, s.paid, s.remaining]),
+      `fees_${format(new Date(), "yyyy-MM-dd")}.csv`,
+    );
+    await logAudit("export", "payment", null, { kind: "fees", rows: filtered.length });
   };
 
   const openPayment = (id: string) => { setPaymentStudentId(id); setPaymentDialogOpen(true); };
