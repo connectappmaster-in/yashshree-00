@@ -296,15 +296,11 @@ function PaymentForm({ studentId, studentName, remaining, defaultYear, onSuccess
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [mode, setMode] = useState("cash");
   const [notes, setNotes] = useState("");
+  const [overConfirmOpen, setOverConfirmOpen] = useState(false);
 
-  const mutation = useMutation({
+  const recordPayment = useMutation({
     mutationFn: async () => {
       const amt = safeNum(amount);
-      if (amt <= 0) throw new Error("Amount must be greater than 0");
-      if (remaining > 0 && amt > remaining) {
-        const ok = window.confirm(`Amount ₹${amt.toLocaleString("en-IN")} exceeds remaining ₹${remaining.toLocaleString("en-IN")}. Record anyway?`);
-        if (!ok) throw new Error("Cancelled");
-      }
       const ay = deriveAcademicYear(date) || defaultYear;
       const { data: ins, error } = await supabase.from("payments").insert({
         student_id: studentId,
@@ -316,11 +312,21 @@ function PaymentForm({ studentId, studentName, remaining, defaultYear, onSuccess
       }).select("id").single();
       if (error) throw error;
       await logAudit("payment_recorded", "payment", ins?.id ?? null, { student_id: studentId, student_name: studentName, amount: amt, mode, date });
-      return { amt, date, mode, notes };
     },
     onSuccess: () => { toast.success("Payment recorded"); onSuccess(); },
-    onError: (e) => { if (e.message !== "Cancelled") toast.error(e.message); },
+    onError: (e) => toast.error(e.message),
   });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = safeNum(amount);
+    if (amt <= 0) { toast.error("Amount must be greater than 0"); return; }
+    if (remaining > 0 && amt > remaining) {
+      setOverConfirmOpen(true);
+      return;
+    }
+    recordPayment.mutate();
+  };
 
   const printReceipt = () => {
     const win = window.open("", "_blank", "width=400,height=600");
@@ -348,30 +354,49 @@ function PaymentForm({ studentId, studentName, remaining, defaultYear, onSuccess
   };
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); mutation.mutate(); }} className="space-y-3">
-      {remaining > 0 && (
-        <p className="text-xs text-muted-foreground">Remaining: <span className="font-semibold text-destructive">₹{remaining.toLocaleString("en-IN")}</span></p>
-      )}
-      <div className="space-y-1.5"><Label>Amount (₹)</Label><Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required min={1} step="0.01" /></div>
-      <div className="space-y-1.5"><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
-      <div className="space-y-1.5">
-        <Label>Mode</Label>
-        <Select value={mode} onValueChange={setMode}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="cash">Cash</SelectItem>
-            <SelectItem value="upi">UPI</SelectItem>
-            <SelectItem value="bank">Bank</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="space-y-1.5"><Label>Notes</Label><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
-      <div className="flex gap-2">
-        <Button type="submit" className="flex-1 bg-secondary text-secondary-foreground hover:bg-secondary/90" disabled={mutation.isPending}>
-          {mutation.isPending ? "Saving..." : "Record Payment"}
-        </Button>
-        <Button type="button" variant="outline" onClick={printReceipt} disabled={!amount}>Print</Button>
-      </div>
-    </form>
+    <>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        {remaining > 0 && (
+          <p className="text-xs text-muted-foreground">Remaining: <span className="font-semibold text-destructive">{inr(remaining)}</span></p>
+        )}
+        <div className="space-y-1.5"><Label>Amount (₹)</Label><Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required min={1} step="0.01" /></div>
+        <div className="space-y-1.5"><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+        <div className="space-y-1.5">
+          <Label>Mode</Label>
+          <Select value={mode} onValueChange={setMode}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="cash">Cash</SelectItem>
+              <SelectItem value="upi">UPI</SelectItem>
+              <SelectItem value="bank">Bank</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5"><Label>Notes</Label><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+        <div className="flex gap-2">
+          <Button type="submit" className="flex-1 bg-secondary text-secondary-foreground hover:bg-secondary/90" disabled={recordPayment.isPending}>
+            {recordPayment.isPending ? "Saving..." : "Record Payment"}
+          </Button>
+          <Button type="button" variant="outline" onClick={printReceipt} disabled={!amount}>Print</Button>
+        </div>
+      </form>
+
+      <AlertDialog open={overConfirmOpen} onOpenChange={setOverConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Amount exceeds remaining</AlertDialogTitle>
+            <AlertDialogDescription>
+              {inr(safeNum(amount))} is more than the remaining balance of {inr(remaining)}. Record the payment anyway?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setOverConfirmOpen(false); recordPayment.mutate(); }}>
+              Yes, record it
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
