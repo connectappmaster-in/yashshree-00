@@ -1,210 +1,184 @@
-# Deep audit — bugs, security & improvements found
+# Deep audit — bugs & improvements
 
-I went through every route, lib, server function, RLS policy, security scan output and the latest migration. Below is everything still broken or worth improving, grouped by severity.
-
----
-
-## 🔴 P0 — Security & correctness (must fix)
-
-### S1. XSS in print receipt (flagged by scanner)
-`src/routes/_authenticated/fees.tsx` `printReceipt()` uses `document.write()` with raw template-string interpolation of `studentName`, `notes`, `mode`, `date`. The popup shares the same origin, so injected `<script>` reads `localStorage` (Supabase JWT). Fix: HTML-escape every interpolated value (or rebuild via DOM API).
-
-### S2. Receipt popup also uses inline `<script>` to print
-That inline script triggers same XSS surface. Replace with `win.print()` called from the parent window after `win.document.close()`.
-
-### S3. Lecture-form `unique` index missing
-"Warn before duplicate" relies on a SELECT-then-INSERT race. Two simultaneous "Log Lecture" submits both pass the check and both insert. Add a partial unique index `(teacher_id, date, subject, batch, academic_year)` (allow NULL gaps); convert duplicate detection to catch the unique-violation error.
-
-### S4. `payments` has no UPDATE/DELETE policy gap is fine, but no admin UPDATE either
-RLS on `payments` only has the catch-all "Admins full access" — that's correct. But the UI never deletes or edits a payment once recorded, even when a typo lands. **Bug**: there is no "Edit / Delete" button on payment history rows. Add admin-only edit + delete with audit trail entries.
-
-### S5. `attendance` teacher policies allow any teacher to mark any student
-Acceptable v1 (you said), but worth narrowing with a `teacher_classes` mapping later. **No code change in this plan; just calling it out.**
-
-### S6. Leaked-password protection still disabled
-Supabase linter still warns. This is a single dashboard toggle — I'll surface a clear instruction and link in the plan output. Cannot be fixed by migration.
+I went through every route, lib, server function, RLS policy, security scan and the latest migrations. Most of the previous "bug-fix sweep" plan is shipped; below are everything still broken, plus fresh findings from this pass, grouped by severity.
 
 ---
 
-## 🟠 P1 — Functional bugs
+## 🔴 P0 — Must fix now
 
-### B1. React fragment without key (console warning every render)
-`src/routes/_authenticated/whatsapp-logs.tsx` line 191 — the `<>...</>` returned inside `.map()` has no key. Replace with `<React.Fragment key={log.id}>` (and remove the inner `key=` props since the fragment owns it).
+### S0. Runtime syntax error in `attendance.tsx`
+Build is currently failing with `Unexpected token (72:3)` — leftover stray `});` from the `students_safe` migration edits. Fix the structure of `MarkTab()` so the student-source helper sits cleanly inside the `useQuery`.
 
-### B2. `users.functions.ts` writes audit_logs directly via service role
-`createUser`, `updateUser`, `deleteUser` insert into `audit_logs` directly with `supabaseAdmin`. That works (service role bypasses RLS), but bypasses the new `log_audit_event` standardisation and means `user_email` is null for those rows. Fix: look up the calling admin's email once and write it, OR call `log_audit_event` via an authed client. Cheaper fix: stamp `user_email` in the insert payload.
+### S1. Payment edit/delete missing (you approved adding it)
+`payments` table is admin-only by RLS, but the UI never lets admins fix typo'd amounts/dates/modes/notes — they're stuck forever. Add:
+- Inline **Edit** + **Delete** action buttons in the payment-history table on `fees.tsx`.
+- `AlertDialog` confirm on delete with student name + amount.
+- Audit entries: `update`/`delete` on `payment` entity with old & new values.
+- Re-invalidate `payments` and `students` queries on success.
 
-### B3. Login auto-redirect loop on already-authenticated visit
-`login.tsx` returns a blank shell when `isAuthenticated`, then schedules `navigate()` in an effect. If the user is on `/login` with a stale session that fails RLS later, you get a flash of blank → dashboard → 403 toast. Replace with `beforeLoad: ({ context }) => isAuthenticated && throw redirect(...)` so the route never mounts.
+### S2. Teacher attendance scope (you approved narrowing)
+Today any teacher can mark attendance for any student. Tighten by:
+1. **DB**: new `teacher_classes` table (`teacher_id`, `class`, `batch`, `academic_year`, unique on the 4-tuple). RLS: admins ALL, teachers SELECT own rows.
+2. **DB**: replace teacher INSERT/UPDATE policies on `attendance` with predicates that require the student's `(class, batch, academic_year)` to exist in the teacher's `teacher_classes`. Use a SECURITY DEFINER helper `teacher_can_mark_student(_student_id uuid)` to keep RLS simple.
+3. **UI**: in `attendance.tsx` `MarkTab`, scope the student list for teachers to their assigned (class, batch). Admins continue to see all.
+4. **UI**: in admin Users management, add an "Assigned Classes" mini-editor on the teacher row (multi-pick of `class` × `batch`) — writes `teacher_classes`.
+5. Audit `teacher_classes` create/delete.
 
-### B4. AdminGuard side-effect navigation
-`AdminGuard.tsx` calls `router.navigate` in a `useEffect`. Per TanStack guidance, this should be `beforeLoad: throw redirect(...)` on each admin route to prevent the brief mount of the protected page. I'll convert each admin route to `beforeLoad` and reduce `AdminGuard` to a defensive wrapper that just hides children.
+---
 
-### B5. `fetchRole` never re-runs on token refresh
-`onAuthStateChange` runs on `SIGNED_IN`/`SIGNED_OUT`/`TOKEN_REFRESHED`. We re-fetch role on every event, including `TOKEN_REFRESHED`, which re-renders the entire app every 50 minutes. Filter to `SIGNED_IN`/`SIGNED_OUT`/`USER_UPDATED` only.
+## 🟠 P1 — Functional bugs still present
 
-### B6. `bulkPending` recomputes WhatsApp URL twice
-`fees.tsx` line 97 builds a throwaway URL just to check validity. Use `sanitizeMobile(s.mobile)` directly — much cheaper and avoids re-encoding the message.
+### B1. React key inside fragment (warning every render)
+`whatsapp-logs.tsx` line 191: the `<>...</>` returned from `.map()` has no key. Replace with `<React.Fragment key={log.id}>` and drop the inner `key=` props.
 
-### B7. Lecture duplicate `confirm()` still uses native `window.confirm`
-`teachers.tsx` line 369. Migrate to `AlertDialog` per the previous plan's standard.
+### B2. `users.functions.ts` audit inserts bypass `log_audit_event` & don't stamp `user_email`
+`createUser`, `updateUser`, `deleteUser` insert directly into `audit_logs` via service role with `user_email = null`. Stamp `user_email` from `assertAdmin()` (look up email once) so the audit page shows who did it.
 
-### B8. Tests: marks save uses `window.confirm` for over-cap
-`tests.tsx` line 218. Same migration to `AlertDialog`.
+### B3. `AdminGuard` side-effect navigation
+`AdminGuard.tsx` calls `router.navigate` in `useEffect` — flashes the protected page for one frame. Convert each admin route (fees, reports, whatsapp-logs, audit, users, teachers) to use `beforeLoad: ({ context }) => assertAdminOrRedirect()`. Reduce `AdminGuard` to a defensive wrapper that just hides children when role is wrong.
 
-### B9. Students form: extra payment confirm uses `window.confirm`
-`students.tsx` line 671. Same migration.
+### B4. `onAuthStateChange` re-fetches role on every TOKEN_REFRESHED
+Every ~50 minutes the entire app re-renders. Filter the handler to `SIGNED_IN`/`SIGNED_OUT`/`USER_UPDATED` only.
 
-### B10. `as any` casts across the app
-`(s as any).board` appears in students.tsx (4×), fees.tsx (1×), reports.tsx (3×). The Supabase types DO contain `board` — these casts are stale leftovers. Drop them and let TS prove they exist.
+### B5. `lectures` partial-unique missing → race-condition duplicates
+"Warn before duplicate" relies on SELECT-then-INSERT. Two simultaneous "Log Lecture" submits both pass the check and both insert. Add partial unique index `(teacher_id, date, subject, batch, academic_year)`; convert the duplicate detection to catch the unique-violation error.
 
-### B11. Recharts statically imported on dashboard, reports, students
-Bundle bloat (~70KB gz). Wrap each chart in `React.lazy` + `Suspense` fallback so the tab/sidebar loads instantly.
+### B6. `window.confirm` still used in 3 places
+- `teachers.tsx:369` — duplicate lecture
+- `tests.tsx:225` — over-cap marks
+- `students.tsx:678` — over-pay (extra payment)
 
-### B12. Dashboard derived data recomputed every render
-class distribution, MoM delta, top pending, monthly chart array, attendance %, newest admissions — all are re-calculated on every render including unrelated state changes (e.g. `showCollected` toggle re-runs the entire `studentPending.map`). Wrap each in `useMemo` keyed on the queries.
+Migrate all three to shadcn `AlertDialog` for theme consistency.
 
-### B13. `whatsapp-logs.tsx` `Broadcast` still uses `setTimeout`-in-loop & native `confirm`
-Same issue as old fees Bulk Remind. Refactor to sequential `await new Promise(r=>setTimeout(r,700))` queue with progress toast & `AlertDialog`.
+### B7. `as any` casts on `board` (stale)
+The Supabase-generated type for `students` already includes `board` — drop the `(s as any).board` casts in `students.tsx` (4×), `fees.tsx` (1×), `reports.tsx` (3×) and let TS prove it.
 
-### B14. `TeacherAttendanceView` upserts in a sequential `for` loop
-`teachers.tsx` line 241. Use a single `.upsert(records, { onConflict: "teacher_id,date" })` with the array — one round-trip instead of N.
+### B8. Recharts statically imported on dashboard / students / reports
+Adds ~70KB gz to first paint. Wrap each chart panel in `React.lazy` + `Suspense` fallback. Note: `dashboard.tsx` is the biggest win and the most visited screen.
 
-### B15. Same loop pattern in `MarksEntryTable.saveMut` and `attendance.tsx saveMutation`
-Replace with batched `.upsert(arr, { onConflict: ... })`.
+### B9. Dashboard derived data recomputed every render
+Class distribution, MoM delta, top pending, monthly chart array, attendance %, newest admissions — all are recalculated on every state change (e.g. the `showCollected` toggle re-runs `studentPending.map`). Wrap each in `useMemo` keyed on the related queries.
 
-### B16. `audit.tsx` ALL_ENTITIES list missing values from union
-`AuditEntity` union (in `lib/audit.ts`) includes `report` but lacks audit-trail of `app_settings`, `user_roles`. Either drop unused entries or include them — current state lets users filter for entries that don't exist. I'll align with the union.
+### B10. Sequential `for` loop upserts (3 places)
+- `attendance.tsx` line ~195 (student attendance save)
+- `teachers.tsx` line ~241 (teacher attendance save)
+- `tests.tsx` line ~241 (marks save)
 
-### B17. Audit search uses `or(... ilike %s%)` without escaping `%` `_` `,`
-A user typing `,` in search breaks the OR clause. Sanitize: replace `%`, `_`, `,`, `(`, `)` with escaped equivalents before building the OR string.
+Replace each with a single batched `.upsert(arr, { onConflict: "..." })` — one round-trip instead of N.
 
-### B18. `inr()` adoption still incomplete
-40+ `₹...toLocaleString` sites remain (dashboard, students details, teachers, reports, fees Tabs). Single global swap to `inr(x)` so a future currency/format change is one file.
+### B11. `bulkPending` builds a throwaway URL just to validate mobile
+`fees.tsx` line 97 calls `buildWhatsAppUrl()` then discards it just to test validity. Use `sanitizeMobile(s.mobile)` directly.
+
+### B12. `audit.tsx` search OR clause not escaped
+A user typing `,`, `%`, `_`, `(`, `)` in the search box breaks `q.or(\`user_email.ilike.%${s}%,entity_id.ilike.%${s}%\`)`. Escape these chars before building the OR string.
+
+### B13. `whatsapp-logs.tsx` Broadcast still uses `setTimeout`-in-loop
+Line 272: `setTimeout(() => window.open(url, "_blank"), i * 600)`. If the user navigates away the timers still fire and pop-ups blast the new screen. Refactor to the same sequential `await new Promise(r=>setTimeout(r,700))` queue with progress toast and `AlertDialog` confirm — same pattern already used in `fees.tsx` bulk-remind.
+
+### B14. `inr()` adoption still incomplete
+~10 sites still build `₹${n.toLocaleString("en-IN")}` by hand (dashboard.tsx 4×, students.tsx 2×, teachers.tsx 1×). Single global swap to `inr(x)` so a future currency/format change is one file.
+
+### B15. `printReceipt` receipt number can collide
+`Date.now().toString().slice(-8)` — two payments in the same ms get the same number. Use the freshly-inserted payment row id (`ins.id.slice(0,8)`) instead, and only render the Print button after the payment is recorded.
 
 ---
 
 ## 🟡 P2 — UX & polish
 
-### U1. Per-route `errorComponent` still missing
-Only the global `defaultErrorComponent` exists — but tanstack-start guidelines say every route with a loader should have its own. None of `_authenticated/*` have one. Add `errorComponent: RouteError` to all 10 route files (RouteError component already exists).
+### U1. Per-route `errorComponent` still missing on every `_authenticated/*` file
+Only the global `defaultErrorComponent` catches today. Add `errorComponent: RouteError` to all 10 admin routes (the component already exists — `src/components/RouteError.tsx`).
 
-### U2. `notFoundComponent` per route
-For `tests`, `students`, `teachers`, `users` — adding a per-route 404 helps when an entity_id route is added later. Skip until those exist.
+### U2. Loading skeletons
+Students/Teachers/WhatsApp-logs/Audit tables still show "Loading…" text. Use the existing `loading-skeleton` component for visual consistency.
 
-### U3. Loading skeleton coverage
-Students table, Teachers salary table, Whatsapp-logs, Audit table still show "Loading..." text. Use `loading-skeleton` for consistency.
+### U3. `aria-label` on icon-only buttons
+Many ghost icon-only buttons in fees/teachers/tests/whatsapp-logs (send/resend/edit/delete/print) lack `aria-label`. Add for keyboard + screen-reader accessibility.
 
-### U4. Form-level zod validation
-Students form does inline `if (!/^\d{10}$/.test(mobile))` — works but mixes validation with mutation. Centralise with a `zod` schema for `studentSchema` (mobile regex, fees ≥ 0, discount 0..total_fees, due_day 1..28). Same for teachers (`fixed_salary ≥ 0`, `per_lecture_fee ≥ 0`).
+### U4. Hardcoded pass mark = 50
+`tests.tsx` line 293 hardcodes `pct >= 50` for green/red. Read from `app_settings` key `pass_mark` with default 35. (Earlier plan noted this.)
 
 ### U5. Empty-state usage incomplete
-`EmptyState` exists; only used in audit + whatsapp-logs. Apply to: tests list (none / filter mismatch), attendance history (no days), students table (no results), reports tabs.
+`EmptyState` exists; only used in audit + whatsapp-logs. Apply to: tests list (no tests / filter mismatch), attendance history (no days), students table (no results), reports tabs.
 
-### U6. aria-label on icon buttons
-Many icon buttons in teachers, tests, fees still lack `aria-label`. Add for accessibility (keyboard + screen reader).
+### U6. Form-level zod validation
+Students form does inline `if (!/^\d{10}$/.test(mobile))` mixed with mutation. Centralise with a `studentSchema` zod (mobile regex, fees ≥ 0, discount 0..total_fees, due_day 1..28). Same for `teachers` form (`fixed_salary ≥ 0`, `per_lecture_fee ≥ 0`).
 
-### U7. Pass-mark threshold hardcoded to 50 in tests UI
-`tests.tsx` line 286 hardcodes `pct >= 50` for green/red. Read from `app_settings` key `pass_mark` with default 35 (matches earlier plan; admins likely want 35 not 50).
+### U7. Audit "Export CSV" exports current page only
+Button label says "Export CSV" but only exports `rows` (the visible page). Add a second button **"Export filtered (all pages)"** that fetches without `range()` and respects all current filters.
 
-### U8. `printReceipt` shows `Date.now().toString().slice(-8)` as receipt number
-Two payments at the same ms collide. Generate a stable receipt number from the inserted payment ID and only render the print button after the payment is recorded (not before).
-
-### U9. Bulk-remind keeps "Pending only" toggle hidden once you turn it off
-Minor: `pendingOnly=false` can show paid students whose Reminder button is hidden (correct), but the "Bulk Remind" count still reflects all filtered. Show the count next to the button: `Bulk Remind (N)`.
-
-### U10. Landing page (`index.tsx`) hash-anchor navigation
-Everything (`#home`, `#courses`, `#features`, `#contact`) lives on a single page. tanstack-start guidelines say to split into separate routes for SSR/SEO. Out of scope unless you want it — calling it out only.
-
-### U11. Currency in PDF says `Rs.` but UI says `₹`
-`export-utils.ts` strips `₹` for jsPDF. Acceptable, but worth a one-liner comment so future devs don't "fix" it.
-
-### U12. WhatsApp resend doesn't pre-validate `type` enum
-If `whatsapp_logs.type` ever gets a value outside the UI's TYPES list, the type select silently filters it out. Add a fallback "other" badge style.
-
-### U13. `audit.tsx` Export CSV says "Export page" but exports only the current page
-Good — but the button label mismatch with "page" vs full filtered set could confuse. Add a second button "Export filtered (all pages)" that fetches without `range()`.
-
-### U14. Login background uses `bg-primary` over a dark page even in light theme
-Visual: secondary text becomes hard to read in light theme. Add a subtle gradient that respects `[data-theme]`.
+### U8. Bulk-remind count visibility
+`fees.tsx` Bulk Remind button doesn't show how many students will be messaged. Display `Bulk Remind (N)`.
 
 ---
 
 ## 🟢 P3 — Performance & DB
 
-### P1. Missing DB indexes
-Add (one migration):
+### P1. Missing DB indexes (one migration, zero-risk)
+Add:
 - `audit_logs(created_at desc)` — pagination
 - `audit_logs(action)`, `audit_logs(entity)` — filters
-- `whatsapp_logs(sent_at desc)` — log feed
-- `whatsapp_logs(student_id)` — resend / per-student lookup
-- `payments(student_id)` — fee aggregation
-- `payments(payment_date)` — month buckets
+- `whatsapp_logs(sent_at desc)`, `whatsapp_logs(student_id)` — feed + per-student lookup
+- `payments(student_id)`, `payments(payment_date)` — fee aggregation & month buckets
 - `attendance(date)`, `attendance(student_id, date)` — per-day & per-student
 - `lectures(teacher_id, date)` — teacher dashboard
 - `test_results(test_id)`, `test_results(student_id)` — marks pages
 - `students(academic_year, status)` — most lists scope on this
-Improves cold-cache pagination/filter latency dramatically once tables grow.
 
 ### P2. `select("*")` everywhere
-Most queries don't need every column. The biggest wins:
+Most queries don't need every column. Biggest wins:
 - `payments.select("id, student_id, amount, payment_date, payment_mode, academic_year, notes")`
 - `attendance.select("id, student_id, date, status")`
 - `whatsapp_logs.select("id, student_id, message, type, sent_at")`
 - `tests.select("id, name, standard, subject, test_date, max_marks, academic_year")`
 
 ### P3. Default 1000-row cap unhandled
-`payments-all`, `attendance-all`, `test-results` (no filter) will silently truncate at 1000. For a long-running classes app this is a real bug. Add explicit `.range()` or scope by `academic_year` consistently and flag the dashboard "Top Pending" with a subtle "(of N…)" if cap reached.
-
-### P4. `chartData` revenue series filters payments client-side
-Better: 6 month-bucketed SQL queries via a single `payments.select("amount, payment_date").gte(...).lte(...)`. Or compute via a Postgres view. Defer unless you have >5k payments.
+`payments-all`, `attendance-all`, `test-results` (no filter) silently truncate at 1000 rows. Add explicit `.range()` or scope by `academic_year` consistently and surface a "(showing first 1000)" hint when capped.
 
 ---
 
 ## ✅ Already shipped (no work)
-- Audit log spoofing — `log_audit_event` + `log_audit_event_anon` RPCs in place; `audit_logs` insert policy dropped.
-- Bulk-remind sequential queue with progress toast.
+- Audit log spoofing → `log_audit_event` + `log_audit_event_anon` RPCs in place; `audit_logs` insert policy dropped.
+- XSS in print receipt → escaped with `esc()` and `win.print()` from parent window.
+- Student mobile hidden from teachers → `students_safe` view + `studentsReadFrom(isAdmin)` helper.
+- Login `validateSearch` for redirect-back.
+- Bulk-remind sequential queue with progress toast (fees only).
 - AlertDialog for over-payment in fees PaymentForm.
 - Copy-from-yesterday 14-day lookback.
-- Resend re-validation.
-- Login `validateSearch` for redirect-back.
-- Fragment-key bug (B1) — actually still present, will fix.
+- Resend re-validation in WhatsApp logs.
 
 ---
 
-## Question before implementing
-
-1. **DB indexes (P1)** — OK to add as one migration? They're zero-risk additions but technically a schema change.
-2. **`window.confirm` → `AlertDialog` everywhere (B7/B8/B9/B13)** — agree? Default yes.
-3. **Recharts lazy-load (B11)** — agree? Default yes.
-4. **Per-route `errorComponent` on all 10 routes (U1)** — agree? Default yes.
-5. **Payment edit/delete UI (S4)** — should I add it now? It's a real gap (typo'd payments are unfixable) but adds ~80 lines.
+## ⏭ Out of scope (deferred / cannot fix here)
+- **Leaked-password protection (S6)** — single Supabase dashboard toggle, no code/migration can do this.
+- Landing-page hash-anchor → split routes (low priority; SEO concern only for marketing site).
+- Pre-computed Postgres views for chart aggregation (defer until >5k payments).
 
 ---
 
-## Files touched (estimate)
+## Files touched
 
-**Edited (~14)**
-- `src/routes/_authenticated/fees.tsx` — XSS fix (S1/S2), edit/delete payment (S4 if approved), `inr()`, perf
-- `src/routes/_authenticated/whatsapp-logs.tsx` — fragment key, Broadcast queue, AlertDialog
-- `src/routes/_authenticated/teachers.tsx` — AlertDialog, batch upsert, `inr()`
-- `src/routes/_authenticated/tests.tsx` — AlertDialog, pass_mark from app_settings, batch upsert, empty state
-- `src/routes/_authenticated/attendance.tsx` — batch upsert
-- `src/routes/_authenticated/students.tsx` — drop `as any`, AlertDialog, zod schema, `inr()`, perf
-- `src/routes/_authenticated/dashboard.tsx` — `useMemo`, lazy recharts, `inr()`
-- `src/routes/_authenticated/reports.tsx` — drop `as any`, lazy recharts, `inr()`
-- `src/routes/_authenticated/audit.tsx` — search escaping, "Export all filtered" button, align entities
-- `src/routes/_authenticated/users.tsx` — beforeLoad guard
-- `src/routes/login.tsx` — beforeLoad redirect when authenticated
-- `src/lib/auth-context.tsx` — filter onAuthStateChange events
-- `src/components/AdminGuard.tsx` — convert to defensive wrapper; routes use beforeLoad
-- `src/utils/users.functions.ts` — stamp user_email in audit inserts
+**Edited (~16)**
+- `src/routes/_authenticated/attendance.tsx` — fix syntax error, narrow teacher view, batch upsert, empty state
+- `src/routes/_authenticated/fees.tsx` — payment edit/delete UI, drop `as any`, `inr()`, `aria-label`, receipt # from row id, batched validation
+- `src/routes/_authenticated/whatsapp-logs.tsx` — fragment-key fix, broadcast queue + AlertDialog, loading skeleton, aria-labels
+- `src/routes/_authenticated/teachers.tsx` — AlertDialog, batched teacher attendance upsert, `inr()`, aria-labels, loading skeleton, lecture unique-violation handling
+- `src/routes/_authenticated/tests.tsx` — AlertDialog, pass_mark from `app_settings`, batched marks upsert, empty state
+- `src/routes/_authenticated/students.tsx` — drop `as any`, AlertDialog, zod schema, `inr()`, loading skeleton, empty state
+- `src/routes/_authenticated/dashboard.tsx` — `useMemo` everywhere, lazy recharts, `inr()`, scoped column selects
+- `src/routes/_authenticated/reports.tsx` — drop `as any`, lazy recharts, `inr()`, scoped column selects
+- `src/routes/_authenticated/audit.tsx` — search escaping, "Export filtered (all pages)" button
+- `src/routes/_authenticated/users.tsx` — `beforeLoad` admin guard, "Assigned Classes" mini-editor for teachers
+- `src/lib/auth-context.tsx` — filter `onAuthStateChange` events
+- `src/components/AdminGuard.tsx` — convert to defensive wrapper
+- `src/utils/users.functions.ts` — stamp `user_email` in audit inserts
+- All 10 `_authenticated/*` route files — add `errorComponent: RouteError`
 
-**New / migration**
-- `supabase/migrations/<ts>_indexes_and_lecture_unique.sql` — indexes + partial unique on lectures
+**New / migrations**
+- `supabase/migrations/<ts>_indexes_and_lecture_unique.sql` — DB indexes + partial unique on `lectures`
+- `supabase/migrations/<ts>_teacher_classes_scope.sql` — `teacher_classes` table + `teacher_can_mark_student()` SECURITY DEFINER helper + new `attendance` RLS policies for teachers
 
-**Out of scope (deferred)**
-- Landing-page route splitting (U10).
-- Teacher attendance class-scoping (S5).
-- Pre-computed Postgres views (P4).
-- Leaked-password protection (S6) — must be enabled in Supabase dashboard manually.
+**Dependencies**: none new.
+
+---
+
+After this sweep the only remaining security warning is **Leaked Password Protection** (manual Supabase dashboard toggle).
