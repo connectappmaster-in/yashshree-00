@@ -188,10 +188,10 @@ function WhatsAppLogsPage() {
                 const st = studentMap.get(log.student_id);
                 const expanded = expandedId === log.id;
                 return (
-                  <>
-                    <TableRow key={log.id} className="hover:bg-muted/50">
+                  <Fragment key={log.id}>
+                    <TableRow className="hover:bg-muted/50">
                       <TableCell className="p-2">
-                        <button onClick={() => setExpandedId(expanded ? null : log.id)} className="text-muted-foreground">
+                        <button onClick={() => setExpandedId(expanded ? null : log.id)} className="text-muted-foreground" aria-label={expanded ? "Collapse message" : "Expand message"}>
                           {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         </button>
                       </TableCell>
@@ -200,17 +200,17 @@ function WhatsAppLogsPage() {
                       <TableCell><Badge variant="secondary" className="text-xs">{log.type}</Badge></TableCell>
                       <TableCell className="text-sm">{format(new Date(log.sent_at), "dd MMM, hh:mm a")}</TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => resend(log)} title="Resend">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => resend(log)} title="Resend" aria-label={`Resend message to ${st?.name || "student"}`}>
                           <Repeat className="h-4 w-4 text-success" />
                         </Button>
                       </TableCell>
                     </TableRow>
                     {expanded && (
-                      <TableRow key={log.id + "-msg"} className="bg-muted/20">
+                      <TableRow className="bg-muted/20">
                         <TableCell colSpan={6} className="text-sm whitespace-pre-wrap py-3">{log.message}</TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </TableBody>

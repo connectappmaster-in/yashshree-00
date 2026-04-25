@@ -274,6 +274,33 @@ export type Database = {
           },
         ]
       }
+      teacher_classes: {
+        Row: {
+          academic_year: string
+          batch: string
+          class: string
+          created_at: string
+          id: string
+          teacher_id: string
+        }
+        Insert: {
+          academic_year?: string
+          batch: string
+          class: string
+          created_at?: string
+          id?: string
+          teacher_id: string
+        }
+        Update: {
+          academic_year?: string
+          batch?: string
+          class?: string
+          created_at?: string
+          id?: string
+          teacher_id?: string
+        }
+        Relationships: []
+      }
       teachers: {
         Row: {
           created_at: string
@@ -506,6 +533,10 @@ export type Database = {
           _entity_id?: string
         }
         Returns: string
+      }
+      teacher_can_mark_student: {
+        Args: { _student_id: string }
+        Returns: boolean
       }
     }
     Enums: {
