@@ -84,7 +84,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsReady(true);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Skip TOKEN_REFRESHED to avoid re-rendering the entire app every ~50 minutes.
+      // Role only changes on sign-in/out or explicit user update — those events still trigger a re-fetch.
+      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED" && event !== "INITIAL_SESSION") {
+        return;
+      }
       setUser(session?.user ?? null);
       if (session?.user) {
         const r = await fetchRole(session.user.id);
