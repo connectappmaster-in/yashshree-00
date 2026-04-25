@@ -332,25 +332,42 @@ function PaymentForm({ studentId, studentName, remaining, defaultYear, onSuccess
     const win = window.open("", "_blank", "width=400,height=600");
     if (!win) return;
     const amt = safeNum(amount);
-    win.document.write(`
-      <html><head><title>Receipt - ${studentName}</title>
+    // HTML-escape every interpolated value to prevent XSS in the same-origin popup.
+    const esc = (s: unknown) =>
+      String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    const receiptNo = Date.now().toString().slice(-8);
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt - ${esc(studentName)}</title>
       <style>body{font-family:system-ui;padding:24px;max-width:340px;margin:auto;color:#222}h1{margin:0 0 4px;font-size:18px}h2{font-size:14px;margin:0 0 16px;color:#666;font-weight:normal}table{width:100%;border-collapse:collapse;font-size:13px}td{padding:6px 0;border-bottom:1px dashed #ccc}.lbl{color:#666}.amt{font-size:22px;font-weight:bold;text-align:center;padding:16px;border:2px dashed #888;border-radius:8px;margin:12px 0}.foot{text-align:center;font-size:11px;color:#888;margin-top:24px}</style>
       </head><body>
       <h1>Yashshree Coaching Classes</h1>
       <h2>Payment Receipt</h2>
-      <div class="amt">Rs. ${amt.toLocaleString("en-IN")}</div>
+      <div class="amt">Rs. ${esc(amt.toLocaleString("en-IN"))}</div>
       <table>
-        <tr><td class="lbl">Student</td><td style="text-align:right;font-weight:600">${studentName}</td></tr>
-        <tr><td class="lbl">Date</td><td style="text-align:right">${date}</td></tr>
-        <tr><td class="lbl">Mode</td><td style="text-align:right;text-transform:capitalize">${mode}</td></tr>
-        ${notes ? `<tr><td class="lbl">Notes</td><td style="text-align:right">${notes}</td></tr>` : ""}
-        <tr><td class="lbl">Receipt #</td><td style="text-align:right">${Date.now().toString().slice(-8)}</td></tr>
+        <tr><td class="lbl">Student</td><td style="text-align:right;font-weight:600">${esc(studentName)}</td></tr>
+        <tr><td class="lbl">Date</td><td style="text-align:right">${esc(date)}</td></tr>
+        <tr><td class="lbl">Mode</td><td style="text-align:right;text-transform:capitalize">${esc(mode)}</td></tr>
+        ${notes ? `<tr><td class="lbl">Notes</td><td style="text-align:right">${esc(notes)}</td></tr>` : ""}
+        <tr><td class="lbl">Receipt #</td><td style="text-align:right">${esc(receiptNo)}</td></tr>
       </table>
       <p class="foot">Thank you. This is a computer-generated receipt.</p>
-      <script>window.onload=()=>setTimeout(()=>window.print(),200)</script>
-      </body></html>
-    `);
+      </body></html>`;
+    win.document.open();
+    win.document.write(html);
     win.document.close();
+    // Trigger print from the parent window — avoids inline <script> in the popup.
+    setTimeout(() => {
+      try {
+        win.focus();
+        win.print();
+      } catch {
+        /* user may have closed the window */
+      }
+    }, 250);
   };
 
   return (
