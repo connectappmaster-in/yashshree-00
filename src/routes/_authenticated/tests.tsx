@@ -16,6 +16,8 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAcademicYear } from "@/lib/academic-year-context";
+import { useAuth } from "@/lib/auth-context";
+import { studentsReadFrom } from "@/lib/students-source";
 import { logAudit } from "@/lib/audit";
 
 export const Route = createFileRoute("/_authenticated/tests")({
