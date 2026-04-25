@@ -334,6 +334,7 @@ function MarkTab() {
 
 function HistoryTab() {
   const { year } = useAcademicYear();
+  const { isAdmin } = useAuth();
   const [month, setMonth] = useState(format(new Date(), "yyyy-MM"));
   const [openDate, setOpenDate] = useState<string | null>(null);
 
@@ -354,13 +355,12 @@ function HistoryTab() {
   });
 
   const { data: students = [] } = useQuery({
-    queryKey: ["students-min", year],
+    queryKey: ["students-min", year, isAdmin],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("students")
+      const { data } = await studentsReadFrom(isAdmin)
         .select("id, name, class")
         .eq("academic_year", year);
-      return data || [];
+      return (data as Array<{ id: string; name: string; class: string }>) || [];
     },
   });
   const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
