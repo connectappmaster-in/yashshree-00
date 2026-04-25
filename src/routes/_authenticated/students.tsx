@@ -17,6 +17,8 @@ import { Plus, Pencil, Trash2, Search, IndianRupee, MessageCircle, Download } fr
 import { format } from "date-fns";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAcademicYear, deriveAcademicYear } from "@/lib/academic-year-context";
+import { useAuth } from "@/lib/auth-context";
+import { studentsReadFrom } from "@/lib/students-source";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { safeNum, inr } from "@/lib/format";
 import { logAudit } from "@/lib/audit";
