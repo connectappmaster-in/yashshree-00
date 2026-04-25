@@ -437,11 +437,50 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      students_safe: {
+        Row: {
+          academic_year: string | null
+          admission_date: string | null
+          batch: string | null
+          board: string | null
+          class: string | null
+          created_at: string | null
+          discount: number | null
+          fee_due_day: number | null
+          id: string | null
+          lecture_days: string[] | null
+          medium: string | null
+          name: string | null
+          status: string | null
+          subjects: string[] | null
+          total_fees: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       current_user_teacher_id: { Args: never; Returns: string }
       current_user_teacher_subject: { Args: never; Returns: string }
+      get_students_safe: {
+        Args: never
+        Returns: {
+          academic_year: string
+          admission_date: string
+          batch: string
+          board: string
+          class: string
+          created_at: string
+          discount: number
+          fee_due_day: number
+          id: string
+          lecture_days: string[]
+          medium: string
+          name: string
+          status: string
+          subjects: string[]
+          total_fees: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
