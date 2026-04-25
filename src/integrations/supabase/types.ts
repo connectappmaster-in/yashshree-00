@@ -68,6 +68,13 @@ export type Database = {
             referencedRelation: "students"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "attendance_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       audit_logs: {
@@ -178,6 +185,13 @@ export type Database = {
             columns: ["student_id"]
             isOneToOne: false
             referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -338,6 +352,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "test_results_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students_safe"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "test_results_test_id_fkey"
             columns: ["test_id"]
             isOneToOne: false
@@ -433,11 +454,71 @@ export type Database = {
             referencedRelation: "students"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "whatsapp_logs_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
     Views: {
-      [_ in never]: never
+      students_safe: {
+        Row: {
+          academic_year: string | null
+          admission_date: string | null
+          batch: string | null
+          board: string | null
+          class: string | null
+          created_at: string | null
+          discount: number | null
+          fee_due_day: number | null
+          id: string | null
+          lecture_days: string[] | null
+          medium: string | null
+          name: string | null
+          status: string | null
+          subjects: string[] | null
+          total_fees: number | null
+        }
+        Insert: {
+          academic_year?: string | null
+          admission_date?: string | null
+          batch?: string | null
+          board?: string | null
+          class?: string | null
+          created_at?: string | null
+          discount?: number | null
+          fee_due_day?: number | null
+          id?: string | null
+          lecture_days?: string[] | null
+          medium?: string | null
+          name?: string | null
+          status?: string | null
+          subjects?: string[] | null
+          total_fees?: number | null
+        }
+        Update: {
+          academic_year?: string | null
+          admission_date?: string | null
+          batch?: string | null
+          board?: string | null
+          class?: string | null
+          created_at?: string | null
+          discount?: number | null
+          fee_due_day?: number | null
+          id?: string | null
+          lecture_days?: string[] | null
+          medium?: string | null
+          name?: string | null
+          status?: string | null
+          subjects?: string[] | null
+          total_fees?: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       current_user_teacher_id: { Args: never; Returns: string }
