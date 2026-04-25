@@ -52,17 +52,23 @@ function AttendancePage() {
 function MarkTab() {
   const queryClient = useQueryClient();
   const { year } = useAcademicYear();
+  const { isAdmin } = useAuth();
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [filterClass, setFilterClass] = useState("all");
   const [filterBatch, setFilterBatch] = useState("all");
   const [attendance, setAttendance] = useState<Record<string, "present" | "absent">>({});
 
   const { data: students = [] } = useQuery({
-    queryKey: ["students-active", year],
+    queryKey: ["students-active", year, isAdmin],
     queryFn: async () => {
-      const { data } = await supabase.from("students").select("*").eq("academic_year", year).eq("status", "active").order("name");
+      const { data } = await studentsReadFrom(isAdmin)
+        .select("*")
+        .eq("academic_year", year)
+        .eq("status", "active")
+        .order("name");
       return data || [];
     },
+  });
   });
 
   const { data: existingAttendance = [] } = useQuery({
