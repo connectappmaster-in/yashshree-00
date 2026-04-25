@@ -14,6 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Check, X, Copy, Flame } from "lucide-react";
 import { format, startOfMonth, endOfMonth, subDays } from "date-fns";
 import { useAcademicYear } from "@/lib/academic-year-context";
+import { useAuth } from "@/lib/auth-context";
+import { studentsReadFrom } from "@/lib/students-source";
 import { logAudit } from "@/lib/audit";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
