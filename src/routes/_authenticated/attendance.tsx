@@ -66,7 +66,7 @@ function MarkTab() {
         .eq("academic_year", year)
         .eq("status", "active")
         .order("name");
-      return data || [];
+      return (data as Tables<"students">[]) || [];
     },
   });
 
