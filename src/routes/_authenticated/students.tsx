@@ -54,6 +54,7 @@ const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 function StudentsPage() {
   const queryClient = useQueryClient();
   const { year } = useAcademicYear();
+  const { isAdmin } = useAuth();
   const [search, setSearch] = useState("");
   const [filterClass, setFilterClass] = useState("all");
   const [filterBoard, setFilterBoard] = useState("all");
@@ -64,10 +65,14 @@ function StudentsPage() {
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
 
   const { data: students = [], isLoading } = useQuery({
-    queryKey: ["students", year],
+    queryKey: ["students", year, isAdmin],
     queryFn: async () => {
-      const { data } = await supabase.from("students").select("*").eq("academic_year", year).order("name");
-      return data || [];
+      // Teachers read via students_safe (mobile excluded server-side).
+      const { data } = await studentsReadFrom(isAdmin)
+        .select("*")
+        .eq("academic_year", year)
+        .order("name");
+      return (data as Tables<"students">[]) || [];
     },
   });
 
