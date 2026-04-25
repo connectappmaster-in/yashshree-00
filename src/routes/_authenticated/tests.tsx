@@ -16,6 +16,8 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAcademicYear } from "@/lib/academic-year-context";
+import { useAuth } from "@/lib/auth-context";
+import { studentsReadFrom } from "@/lib/students-source";
 import { logAudit } from "@/lib/audit";
 
 export const Route = createFileRoute("/_authenticated/tests")({
@@ -27,6 +29,7 @@ const CLASSES = ["5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th"];
 function TestsPage() {
   const queryClient = useQueryClient();
   const { year } = useAcademicYear();
+  const { isAdmin } = useAuth();
   const [filterStandard, setFilterStandard] = useState("all");
   const [selectedTestId, setSelectedTestId] = useState<string | null>(null);
   const [testDialogOpen, setTestDialogOpen] = useState(false);
@@ -41,10 +44,14 @@ function TestsPage() {
   });
 
   const { data: students = [] } = useQuery({
-    queryKey: ["students-active", year],
+    queryKey: ["students-active", year, isAdmin],
     queryFn: async () => {
-      const { data } = await supabase.from("students").select("*").eq("academic_year", year).eq("status", "active").order("name");
-      return data || [];
+      const { data } = await studentsReadFrom(isAdmin)
+        .select("*")
+        .eq("academic_year", year)
+        .eq("status", "active")
+        .order("name");
+      return (data as Tables<"students">[]) || [];
     },
   });
 

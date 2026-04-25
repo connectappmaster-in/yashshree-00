@@ -44,6 +44,7 @@ import {
   isBefore,
 } from "date-fns";
 import { useAuth } from "@/lib/auth-context";
+import { studentsReadFrom } from "@/lib/students-source";
 import { useAcademicYear } from "@/lib/academic-year-context";
 import { safeNum, buildWhatsappUrl, nextDueLabel } from "@/lib/format";
 import { CardsSkeleton } from "@/components/ui/loading-skeleton";
@@ -700,12 +701,12 @@ function TeacherDashboard() {
   const { data: students = [] } = useQuery({
     queryKey: ["students-active-min", year],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("students")
+      // Teacher dashboard reads via students_safe (mobile excluded server-side).
+      const { data } = await studentsReadFrom(false)
         .select("id, class, status, academic_year")
         .eq("academic_year", year)
         .eq("status", "active");
-      return data || [];
+      return (data as Array<{ id: string; class: string; status: string; academic_year: string }>) || [];
     },
   });
 

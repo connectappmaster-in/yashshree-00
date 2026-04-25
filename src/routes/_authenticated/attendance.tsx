@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Check, X, Copy, Flame } from "lucide-react";
 import { format, startOfMonth, endOfMonth, subDays } from "date-fns";
 import { useAcademicYear } from "@/lib/academic-year-context";
+import { useAuth } from "@/lib/auth-context";
+import { studentsReadFrom } from "@/lib/students-source";
 import { logAudit } from "@/lib/audit";
 
 export const Route = createFileRoute("/_authenticated/attendance")({
@@ -50,16 +53,21 @@ function AttendancePage() {
 function MarkTab() {
   const queryClient = useQueryClient();
   const { year } = useAcademicYear();
+  const { isAdmin } = useAuth();
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [filterClass, setFilterClass] = useState("all");
   const [filterBatch, setFilterBatch] = useState("all");
   const [attendance, setAttendance] = useState<Record<string, "present" | "absent">>({});
 
   const { data: students = [] } = useQuery({
-    queryKey: ["students-active", year],
+    queryKey: ["students-active", year, isAdmin],
     queryFn: async () => {
-      const { data } = await supabase.from("students").select("*").eq("academic_year", year).eq("status", "active").order("name");
-      return data || [];
+      const { data } = await studentsReadFrom(isAdmin)
+        .select("*")
+        .eq("academic_year", year)
+        .eq("status", "active")
+        .order("name");
+      return (data as Tables<"students">[]) || [];
     },
   });
 
@@ -326,6 +334,7 @@ function MarkTab() {
 
 function HistoryTab() {
   const { year } = useAcademicYear();
+  const { isAdmin } = useAuth();
   const [month, setMonth] = useState(format(new Date(), "yyyy-MM"));
   const [openDate, setOpenDate] = useState<string | null>(null);
 
@@ -346,13 +355,12 @@ function HistoryTab() {
   });
 
   const { data: students = [] } = useQuery({
-    queryKey: ["students-min", year],
+    queryKey: ["students-min", year, isAdmin],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("students")
+      const { data } = await studentsReadFrom(isAdmin)
         .select("id, name, class")
         .eq("academic_year", year);
-      return data || [];
+      return (data as Array<{ id: string; name: string; class: string }>) || [];
     },
   });
   const studentMap = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);

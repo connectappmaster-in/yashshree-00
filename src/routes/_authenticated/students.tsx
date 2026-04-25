@@ -17,6 +17,8 @@ import { Plus, Pencil, Trash2, Search, IndianRupee, MessageCircle, Download } fr
 import { format } from "date-fns";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAcademicYear, deriveAcademicYear } from "@/lib/academic-year-context";
+import { useAuth } from "@/lib/auth-context";
+import { studentsReadFrom } from "@/lib/students-source";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { safeNum, inr } from "@/lib/format";
 import { logAudit } from "@/lib/audit";
@@ -52,6 +54,7 @@ const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 function StudentsPage() {
   const queryClient = useQueryClient();
   const { year } = useAcademicYear();
+  const { isAdmin } = useAuth();
   const [search, setSearch] = useState("");
   const [filterClass, setFilterClass] = useState("all");
   const [filterBoard, setFilterBoard] = useState("all");
@@ -62,10 +65,14 @@ function StudentsPage() {
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
 
   const { data: students = [], isLoading } = useQuery({
-    queryKey: ["students", year],
+    queryKey: ["students", year, isAdmin],
     queryFn: async () => {
-      const { data } = await supabase.from("students").select("*").eq("academic_year", year).order("name");
-      return data || [];
+      // Teachers read via students_safe (mobile excluded server-side).
+      const { data } = await studentsReadFrom(isAdmin)
+        .select("*")
+        .eq("academic_year", year)
+        .order("name");
+      return (data as Tables<"students">[]) || [];
     },
   });
 
