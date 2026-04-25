@@ -69,7 +69,6 @@ function MarkTab() {
       return data || [];
     },
   });
-  });
 
   const { data: existingAttendance = [] } = useQuery({
     queryKey: ["attendance", date, year],
