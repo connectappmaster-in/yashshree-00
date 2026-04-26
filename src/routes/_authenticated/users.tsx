@@ -25,8 +25,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Plus, Pencil, Trash2, Shield, GraduationCap, UserCog, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
+import { requireAdmin } from "@/lib/route-guards";
 
 export const Route = createFileRoute("/_authenticated/users")({
+  beforeLoad: requireAdmin,
   component: UsersPage,
 });
 
