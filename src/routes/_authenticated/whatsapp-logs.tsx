@@ -15,7 +15,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { format, subDays, startOfMonth } from "date-fns";
-import { AdminGuard } from "@/components/AdminGuard";
+import { requireAdmin } from "@/lib/route-guards";
 import { Send, Repeat, ChevronDown, ChevronRight, MessageCircle, Download, Inbox } from "lucide-react";
 import { buildWhatsappUrl } from "@/lib/format";
 import { logAudit } from "@/lib/audit";
@@ -23,7 +23,8 @@ import { exportCSV } from "@/lib/export-utils";
 import { EmptyState } from "@/components/EmptyState";
 
 export const Route = createFileRoute("/_authenticated/whatsapp-logs")({
-  component: () => <AdminGuard><WhatsAppLogsPage /></AdminGuard>,
+  beforeLoad: requireAdmin,
+  component: WhatsAppLogsPage,
 });
 
 const PAGE_SIZE = 50;

@@ -18,11 +18,12 @@ import { Plus, Pencil, Trash2, BookOpen } from "lucide-react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAcademicYear, deriveAcademicYear } from "@/lib/academic-year-context";
-import { AdminGuard } from "@/components/AdminGuard";
+import { requireAdmin } from "@/lib/route-guards";
 import { logAudit } from "@/lib/audit";
 
 export const Route = createFileRoute("/_authenticated/teachers")({
-  component: () => <AdminGuard><TeachersPage /></AdminGuard>,
+  beforeLoad: requireAdmin,
+  component: TeachersPage,
 });
 
 const BATCHES = ["Morning", "Evening"];

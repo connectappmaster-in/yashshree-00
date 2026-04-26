@@ -10,13 +10,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { Search, Download, ScrollText } from "lucide-react";
-import { AdminGuard } from "@/components/AdminGuard";
 import { exportCSV } from "@/lib/export-utils";
 import { logAudit } from "@/lib/audit";
 import { EmptyState } from "@/components/EmptyState";
+import { requireAdmin } from "@/lib/route-guards";
 
 export const Route = createFileRoute("/_authenticated/audit")({
-  component: () => <AdminGuard><AuditPage /></AdminGuard>,
+  beforeLoad: requireAdmin,
+  component: AuditPage,
 });
 
 interface AuditRow {
