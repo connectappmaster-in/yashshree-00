@@ -238,10 +238,9 @@ function TeacherAttendanceView({ teachers, attRecords, year }: { teachers: Table
       const changedIds = Object.keys(pending);
       if (changedIds.length === 0) return 0;
       const recs = changedIds.map((id) => ({ teacher_id: id, date, status: pending[id], academic_year: year }));
-      for (const r of recs) {
-        const { error } = await supabase.from("teacher_attendance").upsert(r, { onConflict: "teacher_id,date" });
-        if (error) throw error;
-      }
+      // Single batched upsert — one round trip instead of N.
+      const { error } = await supabase.from("teacher_attendance").upsert(recs, { onConflict: "teacher_id,date" });
+      if (error) throw error;
       await logAudit("attendance_marked", "teacher_attendance", null, { date, count: recs.length });
       return recs.length;
     },
