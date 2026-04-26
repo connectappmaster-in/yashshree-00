@@ -142,7 +142,7 @@ function StudentsPage() {
   const filtered = studentSummary.filter((s) => {
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.mobile.includes(search);
     const matchClass = filterClass === "all" || s.class === filterClass;
-    const matchBoard = filterBoard === "all" || (s as any).board === filterBoard;
+    const matchBoard = filterBoard === "all" || s.board === filterBoard;
     const matchMedium = filterMedium === "all" || s.medium === filterMedium;
     return matchSearch && matchClass && matchBoard && matchMedium;
   });
@@ -155,7 +155,7 @@ function StudentsPage() {
     exportCSV(
       ["Name", "Mobile", "Class", "Board", "Medium", "Batch", "Total Fees", "Discount", "Paid", "Remaining", "Status"],
       filtered.map((s) => [
-        s.name, s.mobile, s.class, (s as any).board ?? "", s.medium, s.batch,
+        s.name, s.mobile, s.class, s.board ?? "", s.medium, s.batch,
         safeNum(s.total_fees), safeNum(s.discount), s.paid, s.remaining, s.status,
       ]),
       `students_${format(new Date(), "yyyy-MM-dd")}.csv`,
@@ -261,7 +261,7 @@ function StudentsPage() {
                           onClick={() => setSelectedId(s.id)}
                         >
                           <TableCell className="py-2 font-medium">{s.name}</TableCell>
-                          <TableCell className="py-2 text-xs text-muted-foreground">{s.class} • {(s as any).board} • {s.medium}</TableCell>
+                          <TableCell className="py-2 text-xs text-muted-foreground">{s.class} • {s.board} • {s.medium}</TableCell>
                           <TableCell className={`py-2 text-right text-xs font-bold ${s.remaining > 0 ? "text-destructive" : "text-success"}`}>
                             {s.remaining > 0 ? `₹${s.remaining.toLocaleString("en-IN")}` : "Paid ✓"}
                           </TableCell>
@@ -287,7 +287,7 @@ function StudentsPage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <h2 className="text-lg font-bold font-display">{selected.name}</h2>
-                      <p className="text-sm text-muted-foreground">{selected.mobile} • {selected.class} • {(selected as any).board} {selected.medium} • {selected.batch} Batch</p>
+                      <p className="text-sm text-muted-foreground">{selected.mobile} • {selected.class} • {selected.board} {selected.medium} • {selected.batch} Batch</p>
                       <p className="text-xs text-muted-foreground mt-1">Due Day: {selected.fee_due_day}th • Admitted: {format(new Date(selected.admission_date), "dd MMM yyyy")}</p>
                     </div>
                     <div className="flex gap-1">
@@ -503,7 +503,7 @@ function StudentTestsView({ studentId, standard, tests, results }: { studentId: 
 }
 
 function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"students"> | null; defaultYear: string; onSuccess: () => void }) {
-  const initialBoard: Board = ((student as any)?.board === "CBSE" ? "CBSE" : "SSC");
+  const initialBoard: Board = (student?.board === "CBSE" ? "CBSE" : "SSC");
   const initialMedium = student?.medium && MEDIUMS_BY_BOARD[initialBoard].includes(student.medium)
     ? student.medium
     : MEDIUMS_BY_BOARD[initialBoard][0];
