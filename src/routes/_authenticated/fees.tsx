@@ -20,14 +20,15 @@ import { Search, MessageCircle, IndianRupee, Send, Download, History, Pencil, Tr
 import { format } from "date-fns";
 import { useAcademicYear, deriveAcademicYear } from "@/lib/academic-year-context";
 import { safeNum, sanitizeMobile, buildWhatsappUrl, nextDueLabel, inr } from "@/lib/format";
-import { AdminGuard } from "@/components/AdminGuard";
 import { RouteError } from "@/components/RouteError";
 import { logAudit } from "@/lib/audit";
 import { exportCSV } from "@/lib/export-utils";
+import { requireAdmin } from "@/lib/route-guards";
 import type { Tables } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/_authenticated/fees")({
-  component: () => <AdminGuard><FeesPage /></AdminGuard>,
+  beforeLoad: requireAdmin,
+  component: FeesPage,
   errorComponent: RouteError,
 });
 
