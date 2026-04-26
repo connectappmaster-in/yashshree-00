@@ -1,7 +1,7 @@
 // Server-only helpers for user management. Never imported in client code.
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-export async function assertAdmin(userId: string) {
+export async function assertAdmin(userId: string): Promise<{ email: string | null }> {
   const { data, error } = await supabaseAdmin
     .from("user_roles")
     .select("role")
@@ -10,6 +10,14 @@ export async function assertAdmin(userId: string) {
     .maybeSingle();
   if (error) throw new Error("Failed to verify role");
   if (!data) throw new Error("Forbidden: admin role required");
+  // Look up the actor's email so audit rows have a usable "user" column.
+  // Failure here must NOT block the action — fall back to null.
+  try {
+    const { data: u } = await supabaseAdmin.auth.admin.getUserById(userId);
+    return { email: u.user?.email ?? null };
+  } catch {
+    return { email: null };
+  }
 }
 
 export async function listAuthUsers() {
