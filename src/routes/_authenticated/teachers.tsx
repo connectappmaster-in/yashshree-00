@@ -350,13 +350,33 @@ function LectureForm({ teacherId, teachers, defaultYear, onSuccess }: { teacherI
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [subject, setSubject] = useState(teacher?.subject || "");
   const [batch, setBatch] = useState("Morning");
+  const [dupOpen, setDupOpen] = useState(false);
+
+  const insertLecture = async () => {
+    const subj = subject.trim();
+    const ay = deriveAcademicYear(date) || defaultYear;
+    const { data: ins, error } = await supabase.from("lectures").insert({
+      teacher_id: teacherId,
+      date,
+      subject: subj,
+      batch,
+      academic_year: ay,
+    }).select("id").single();
+    if (error) {
+      // 23505 = unique_violation. Surface a friendly message.
+      if (error.code === "23505") {
+        throw new Error("A lecture with the same teacher, date, subject and batch is already logged.");
+      }
+      throw error;
+    }
+    await logAudit("lecture_logged", "lecture", ins?.id ?? null, { teacher_id: teacherId, date, subject: subj, batch });
+  };
 
   const mutation = useMutation({
     mutationFn: async () => {
       const subj = subject.trim();
       if (!subj) throw new Error("Subject is required");
-      const ay = deriveAcademicYear(date) || defaultYear;
-      // Warn (don't block) on duplicates: same teacher + date + subject + batch
+      // Pre-check: warn (don't block) on duplicates so the user can choose to re-log.
       const { data: dupes } = await supabase
         .from("lectures")
         .select("id")
@@ -365,38 +385,53 @@ function LectureForm({ teacherId, teachers, defaultYear, onSuccess }: { teacherI
         .eq("subject", subj)
         .eq("batch", batch);
       if (dupes && dupes.length > 0) {
-        if (!window.confirm("A lecture with same teacher, date, subject and batch already exists. Log another?")) {
-          throw new Error("Cancelled");
-        }
+        // Defer to AlertDialog confirmation flow.
+        setDupOpen(true);
+        throw new Error("__DUP__");
       }
-      const { data: ins, error } = await supabase.from("lectures").insert({
-        teacher_id: teacherId,
-        date,
-        subject: subj,
-        batch,
-        academic_year: ay,
-      }).select("id").single();
-      if (error) throw error;
-      await logAudit("lecture_logged", "lecture", ins?.id ?? null, { teacher_id: teacherId, date, subject: subj, batch });
+      await insertLecture();
     },
     onSuccess: () => { toast.success("Lecture logged"); onSuccess(); },
-    onError: (e) => { if (e.message !== "Cancelled") toast.error(e.message); },
+    onError: (e) => { if (e.message !== "__DUP__") toast.error(e.message); },
+  });
+
+  const confirmDup = useMutation({
+    mutationFn: insertLecture,
+    onSuccess: () => { setDupOpen(false); toast.success("Lecture logged"); onSuccess(); },
+    onError: (e) => { setDupOpen(false); toast.error(e.message); },
   });
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); mutation.mutate(); }} className="space-y-3">
-      <div className="space-y-1.5"><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
-      <div className="space-y-1.5"><Label>Subject</Label><Input value={subject} onChange={(e) => setSubject(e.target.value)} required /></div>
-      <div className="space-y-1.5">
-        <Label>Batch</Label>
-        <Select value={batch} onValueChange={setBatch}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>{BATCHES.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
-        </Select>
-      </div>
-      <Button type="submit" className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90" disabled={mutation.isPending}>
-        {mutation.isPending ? "Saving..." : "Log"}
-      </Button>
-    </form>
+    <>
+      <form onSubmit={(e) => { e.preventDefault(); mutation.mutate(); }} className="space-y-3">
+        <div className="space-y-1.5"><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+        <div className="space-y-1.5"><Label>Subject</Label><Input value={subject} onChange={(e) => setSubject(e.target.value)} required /></div>
+        <div className="space-y-1.5">
+          <Label>Batch</Label>
+          <Select value={batch} onValueChange={setBatch}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>{BATCHES.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <Button type="submit" className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90" disabled={mutation.isPending || confirmDup.isPending}>
+          {mutation.isPending || confirmDup.isPending ? "Saving..." : "Log"}
+        </Button>
+      </form>
+
+      <AlertDialog open={dupOpen} onOpenChange={setDupOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Duplicate lecture detected</AlertDialogTitle>
+            <AlertDialogDescription>
+              A lecture for the same teacher, date, subject and batch is already logged. Log another anyway?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => confirmDup.mutate()}>Log it</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
