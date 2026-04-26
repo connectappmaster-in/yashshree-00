@@ -10,6 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { format, subDays, startOfMonth } from "date-fns";
 import { AdminGuard } from "@/components/AdminGuard";
 import { Send, Repeat, ChevronDown, ChevronRight, MessageCircle, Download, Inbox } from "lucide-react";
@@ -325,6 +329,23 @@ function Broadcast({ students, onSent }: { students: { id: string; name: string;
           </Button>
         </div>
       </CardContent>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send {targets.length} broadcast messages?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will open a new WhatsApp tab for each student in sequence (one every ~700ms) and log the message in the audit trail. Allow popups for this site.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={runSend} className="bg-success text-success-foreground hover:bg-success/90">
+              Send {targets.length}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
