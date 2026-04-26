@@ -260,24 +260,39 @@ function Broadcast({ students, onSent }: { students: { id: string; name: string;
     setter(next);
   };
 
-  const send = async () => {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const runSend = async () => {
+    setConfirmOpen(false);
+    setSending(true);
+    let sent = 0;
+    const total = targets.length;
+    const progressId = toast.loading(`Sending 0 / ${total}…`);
+    try {
+      for (const s of targets) {
+        const url = buildWhatsappUrl(s.mobile, message);
+        if (!url) continue;
+        window.open(url, "_blank");
+        await supabase.from("whatsapp_logs").insert({ student_id: s.id, message, type: "broadcast" });
+        sent++;
+        toast.loading(`Sending ${sent} / ${total}…`, { id: progressId });
+        await new Promise((r) => setTimeout(r, 700));
+      }
+      await logAudit("whatsapp_broadcast", "whatsapp", null, { count: sent, type: "broadcast" });
+      toast.success(`Sent ${sent} broadcast${sent === 1 ? "" : "s"}.`, { id: progressId });
+    } catch (e) {
+      toast.error(`Stopped after ${sent}: ${(e as Error).message}`, { id: progressId });
+    } finally {
+      setSending(false);
+      setMessage("");
+      onSent();
+    }
+  };
+
+  const send = () => {
     if (!message.trim()) { toast.error("Compose a message first"); return; }
     if (targets.length === 0) { toast.error("No matching students"); return; }
-    if (!confirm(`Open ${targets.length} WhatsApp tabs and log each? Allow popups for this site.`)) return;
-    setSending(true);
-    let i = 0;
-    for (const s of targets) {
-      const url = buildWhatsappUrl(s.mobile, message);
-      if (!url) continue;
-      setTimeout(() => window.open(url, "_blank"), i * 600);
-      await supabase.from("whatsapp_logs").insert({ student_id: s.id, message, type: "broadcast" });
-      i++;
-    }
-    await logAudit("whatsapp_broadcast", "whatsapp", null, { count: i, type: "broadcast" });
-    setSending(false);
-    toast.success(`${i} broadcast messages queued`);
-    setMessage("");
-    onSent();
+    setConfirmOpen(true);
   };
 
   return (
