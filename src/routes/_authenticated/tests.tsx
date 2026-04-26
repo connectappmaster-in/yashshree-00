@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -228,7 +228,7 @@ function MarksEntryTable({ test, students, results, onSaved }: { test: Tables<"t
   // Compute "over cap" entries (used for the AlertDialog confirm).
   const overEntries = useMemo(() => {
     const max = Number(test.max_marks);
-    return students.filter((s) => {
+    return students.filter((s: Tables<"students">) => {
       const v = initialMarks(s.id);
       return v !== "" && Number(v) > max;
     });
