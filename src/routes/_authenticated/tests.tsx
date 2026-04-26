@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -202,9 +202,22 @@ function TestsPage() {
 
 function MarksEntryTable({ test, students, results, onSaved }: { test: Tables<"tests">; students: Tables<"students">[]; results: Tables<"test_results">[]; onSaved: () => void }) {
   const [marks, setMarks] = useState<Record<string, string>>({});
+  const [overConfirmOpen, setOverConfirmOpen] = useState(false);
 
   // Reset draft marks whenever the selected test changes — prevents cross-test contamination
   useEffect(() => { setMarks({}); }, [test.id]);
+
+  // Pass mark threshold from app_settings (default 35).
+  const { data: passMark = 35 } = useQuery({
+    queryKey: ["app_settings", "pass_mark"],
+    queryFn: async () => {
+      const { data } = await supabase.from("app_settings").select("value").eq("key", "pass_mark").maybeSingle();
+      const v = data?.value as { percent?: number } | number | null;
+      if (typeof v === "number") return v;
+      if (v && typeof v === "object" && typeof v.percent === "number") return v.percent;
+      return 35;
+    },
+  });
 
   const initialMarks = (sid: string) => {
     if (marks[sid] !== undefined) return marks[sid];
@@ -212,49 +225,59 @@ function MarksEntryTable({ test, students, results, onSaved }: { test: Tables<"t
     return r ? String(Number(r.marks_obtained)) : "";
   };
 
+  // Compute "over cap" entries (used for the AlertDialog confirm).
+  const overEntries = useMemo(() => {
+    const max = Number(test.max_marks);
+    return students.filter((s: Tables<"students">) => {
+      const v = initialMarks(s.id);
+      return v !== "" && Number(v) > max;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [marks, results, students, test.max_marks]);
+
+  const performSave = async () => {
+    const max = Number(test.max_marks);
+    // Records to upsert (entered marks)
+    const toUpsert = students
+      .filter((s) => initialMarks(s.id) !== "")
+      .map((s) => ({
+        test_id: test.id,
+        student_id: s.id,
+        marks_obtained: Math.min(max, Number(initialMarks(s.id)) || 0),
+      }));
+    // Records to delete: previously had marks but user cleared them
+    const toDelete = students
+      .filter((s) => initialMarks(s.id) === "" && results.some((r) => r.student_id === s.id))
+      .map((s) => s.id);
+    if (toUpsert.length > 0) {
+      // Single batched upsert — one round trip instead of N.
+      const { error } = await supabase.from("test_results").upsert(toUpsert, { onConflict: "test_id,student_id" });
+      if (error) throw error;
+    }
+    if (toDelete.length > 0) {
+      const { error } = await supabase.from("test_results").delete().eq("test_id", test.id).in("student_id", toDelete);
+      if (error) throw error;
+    }
+    await logAudit("test_marks_saved", "test_result", test.id, {
+      test_name: test.name,
+      saved: toUpsert.length,
+      cleared: toDelete.length,
+    });
+  };
+
   const saveMut = useMutation({
-    mutationFn: async () => {
-      const max = Number(test.max_marks);
-      // Detect entries that exceed max so we can warn the user (don't silently cap)
-      const overEntries = students.filter((s) => {
-        const v = initialMarks(s.id);
-        return v !== "" && Number(v) > max;
-      });
-      if (overEntries.length > 0) {
-        const names = overEntries.map((s) => s.name).join(", ");
-        if (!window.confirm(`Some marks exceed max (${max}) and will be capped: ${names}. Continue?`)) {
-          throw new Error("Cancelled");
-        }
-      }
-      // Records to upsert (entered marks)
-      const toUpsert = students
-        .filter((s) => initialMarks(s.id) !== "")
-        .map((s) => ({
-          test_id: test.id,
-          student_id: s.id,
-          marks_obtained: Math.min(max, Number(initialMarks(s.id)) || 0),
-        }));
-      // Records to delete: previously had marks but user cleared them
-      const toDelete = students
-        .filter((s) => initialMarks(s.id) === "" && results.some((r) => r.student_id === s.id))
-        .map((s) => s.id);
-      for (const r of toUpsert) {
-        const { error } = await supabase.from("test_results").upsert(r, { onConflict: "test_id,student_id" });
-        if (error) throw error;
-      }
-      if (toDelete.length > 0) {
-        const { error } = await supabase.from("test_results").delete().eq("test_id", test.id).in("student_id", toDelete);
-        if (error) throw error;
-      }
-      await logAudit("test_marks_saved", "test_result", test.id, {
-        test_name: test.name,
-        saved: toUpsert.length,
-        cleared: toDelete.length,
-      });
-    },
+    mutationFn: performSave,
     onSuccess: () => { toast.success("Marks saved"); setMarks({}); onSaved(); },
-    onError: (e) => { if (e.message !== "Cancelled") toast.error(e.message); },
+    onError: (e) => toast.error(e.message),
   });
+
+  const handleSaveClick = () => {
+    if (overEntries.length > 0) {
+      setOverConfirmOpen(true);
+      return;
+    }
+    saveMut.mutate();
+  };
 
   if (students.length === 0) {
     return <p className="text-sm text-muted-foreground text-center py-6">No active students for {test.standard}</p>;
@@ -290,7 +313,7 @@ function MarksEntryTable({ test, students, results, onSaved }: { test: Tables<"t
                     />
                   </TableCell>
                   <TableCell className="text-right text-xs">
-                    {pct !== null ? <span className={pct >= 50 ? "text-success font-bold" : "text-destructive font-bold"}>{pct}%</span> : <span className="text-muted-foreground">—</span>}
+                    {pct !== null ? <span className={pct >= passMark ? "text-success font-bold" : "text-destructive font-bold"}>{pct}%</span> : <span className="text-muted-foreground">—</span>}
                   </TableCell>
                 </TableRow>
               );
@@ -298,9 +321,26 @@ function MarksEntryTable({ test, students, results, onSaved }: { test: Tables<"t
           </TableBody>
         </Table>
       </div>
-      <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90 font-bold">
+      <Button onClick={handleSaveClick} disabled={saveMut.isPending} className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90 font-bold">
         {saveMut.isPending ? "Saving..." : "Save Marks"}
       </Button>
+
+      <AlertDialog open={overConfirmOpen} onOpenChange={setOverConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Some marks exceed the maximum</AlertDialogTitle>
+            <AlertDialogDescription>
+              {overEntries.length} student{overEntries.length === 1 ? "" : "s"} have marks above {test.max_marks}: {overEntries.map((s) => s.name).join(", ")}. They will be capped at {test.max_marks}. Continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setOverConfirmOpen(false); saveMut.mutate(); }}>
+              Yes, save (capped)
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

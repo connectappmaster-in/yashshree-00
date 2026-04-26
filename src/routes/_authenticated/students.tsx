@@ -142,7 +142,7 @@ function StudentsPage() {
   const filtered = studentSummary.filter((s) => {
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.mobile.includes(search);
     const matchClass = filterClass === "all" || s.class === filterClass;
-    const matchBoard = filterBoard === "all" || (s as any).board === filterBoard;
+    const matchBoard = filterBoard === "all" || s.board === filterBoard;
     const matchMedium = filterMedium === "all" || s.medium === filterMedium;
     return matchSearch && matchClass && matchBoard && matchMedium;
   });
@@ -155,7 +155,7 @@ function StudentsPage() {
     exportCSV(
       ["Name", "Mobile", "Class", "Board", "Medium", "Batch", "Total Fees", "Discount", "Paid", "Remaining", "Status"],
       filtered.map((s) => [
-        s.name, s.mobile, s.class, (s as any).board ?? "", s.medium, s.batch,
+        s.name, s.mobile, s.class, s.board ?? "", s.medium, s.batch,
         safeNum(s.total_fees), safeNum(s.discount), s.paid, s.remaining, s.status,
       ]),
       `students_${format(new Date(), "yyyy-MM-dd")}.csv`,
@@ -261,7 +261,7 @@ function StudentsPage() {
                           onClick={() => setSelectedId(s.id)}
                         >
                           <TableCell className="py-2 font-medium">{s.name}</TableCell>
-                          <TableCell className="py-2 text-xs text-muted-foreground">{s.class} • {(s as any).board} • {s.medium}</TableCell>
+                          <TableCell className="py-2 text-xs text-muted-foreground">{s.class} • {s.board} • {s.medium}</TableCell>
                           <TableCell className={`py-2 text-right text-xs font-bold ${s.remaining > 0 ? "text-destructive" : "text-success"}`}>
                             {s.remaining > 0 ? `₹${s.remaining.toLocaleString("en-IN")}` : "Paid ✓"}
                           </TableCell>
@@ -287,7 +287,7 @@ function StudentsPage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <h2 className="text-lg font-bold font-display">{selected.name}</h2>
-                      <p className="text-sm text-muted-foreground">{selected.mobile} • {selected.class} • {(selected as any).board} {selected.medium} • {selected.batch} Batch</p>
+                      <p className="text-sm text-muted-foreground">{selected.mobile} • {selected.class} • {selected.board} {selected.medium} • {selected.batch} Batch</p>
                       <p className="text-xs text-muted-foreground mt-1">Due Day: {selected.fee_due_day}th • Admitted: {format(new Date(selected.admission_date), "dd MMM yyyy")}</p>
                     </div>
                     <div className="flex gap-1">
@@ -503,7 +503,7 @@ function StudentTestsView({ studentId, standard, tests, results }: { studentId: 
 }
 
 function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"students"> | null; defaultYear: string; onSuccess: () => void }) {
-  const initialBoard: Board = ((student as any)?.board === "CBSE" ? "CBSE" : "SSC");
+  const initialBoard: Board = (student?.board === "CBSE" ? "CBSE" : "SSC");
   const initialMedium = student?.medium && MEDIUMS_BY_BOARD[initialBoard].includes(student.medium)
     ? student.medium
     : MEDIUMS_BY_BOARD[initialBoard][0];
@@ -649,6 +649,7 @@ function PaymentForm({ studentId, defaultYear, remaining, onSuccess }: { student
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [mode, setMode] = useState("cash");
   const [notes, setNotes] = useState("");
+  const [overConfirmOpen, setOverConfirmOpen] = useState(false);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -675,34 +676,54 @@ function PaymentForm({ studentId, defaultYear, remaining, onSuccess }: { student
     const amt = safeNum(amount);
     if (amt <= 0) { toast.error("Enter a valid amount"); return; }
     if (remaining > 0 && amt > remaining) {
-      if (!window.confirm(`Amount ${inr(amt)} is more than remaining ${inr(remaining)}. Proceed anyway?`)) return;
+      setOverConfirmOpen(true);
+      return;
     }
     mutation.mutate();
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
-      <div className="space-y-1.5">
-        <Label>Amount (₹)</Label>
-        <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required min={1} step="0.01" />
-        {remaining > 0 && <p className="text-xs text-muted-foreground">Remaining: {inr(remaining)}</p>}
-      </div>
-      <div className="space-y-1.5"><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
-      <div className="space-y-1.5">
-        <Label>Payment Mode</Label>
-        <Select value={mode} onValueChange={setMode}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="cash">Cash</SelectItem>
-            <SelectItem value="upi">UPI</SelectItem>
-            <SelectItem value="bank">Bank Transfer</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="space-y-1.5"><Label>Notes (optional)</Label><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
-      <Button type="submit" className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90" disabled={mutation.isPending}>
-        {mutation.isPending ? "Saving..." : "Record Payment"}
-      </Button>
-    </form>
+    <>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="space-y-1.5">
+          <Label>Amount (₹)</Label>
+          <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} required min={1} step="0.01" />
+          {remaining > 0 && <p className="text-xs text-muted-foreground">Remaining: {inr(remaining)}</p>}
+        </div>
+        <div className="space-y-1.5"><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+        <div className="space-y-1.5">
+          <Label>Payment Mode</Label>
+          <Select value={mode} onValueChange={setMode}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="cash">Cash</SelectItem>
+              <SelectItem value="upi">UPI</SelectItem>
+              <SelectItem value="bank">Bank Transfer</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5"><Label>Notes (optional)</Label><Input value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+        <Button type="submit" className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/90" disabled={mutation.isPending}>
+          {mutation.isPending ? "Saving..." : "Record Payment"}
+        </Button>
+      </form>
+
+      <AlertDialog open={overConfirmOpen} onOpenChange={setOverConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Amount exceeds remaining</AlertDialogTitle>
+            <AlertDialogDescription>
+              {inr(safeNum(amount))} is more than the remaining balance of {inr(remaining)}. Record the payment anyway?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setOverConfirmOpen(false); mutation.mutate(); }}>
+              Yes, record it
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

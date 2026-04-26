@@ -192,10 +192,10 @@ function MarkTab() {
       const records = changedIds
         .filter((id) => filtered.some((s) => s.id === id))
         .map((id) => ({ student_id: id, date, status: attendance[id], academic_year: year }));
-      for (const record of records) {
-        const { error } = await supabase.from("attendance").upsert(record, { onConflict: "student_id,date" });
-        if (error) throw error;
-      }
+      if (records.length === 0) return 0;
+      // Single batched upsert — one round trip instead of N.
+      const { error } = await supabase.from("attendance").upsert(records, { onConflict: "student_id,date" });
+      if (error) throw error;
       await logAudit("attendance_marked", "attendance", null, { date, count: records.length });
       return records.length;
     },

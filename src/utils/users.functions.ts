@@ -53,7 +53,7 @@ export const createUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => createUserSchema.parse(input))
   .handler(async ({ data, context }) => {
-    await assertAdmin(context.userId);
+    const { email: actorEmail } = await assertAdmin(context.userId);
 
     const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
       email: data.email,
@@ -76,6 +76,7 @@ export const createUser = createServerFn({ method: "POST" })
 
     await supabaseAdmin.from("audit_logs").insert({
       user_id: context.userId,
+      user_email: actorEmail,
       action: "user_created",
       entity: "user",
       entity_id: created.user.id,
@@ -98,7 +99,7 @@ export const updateUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => updateUserSchema.parse(input))
   .handler(async ({ data, context }) => {
-    await assertAdmin(context.userId);
+    const { email: actorEmail } = await assertAdmin(context.userId);
 
     // Self-protection: cannot demote self away from admin
     if (data.userId === context.userId && data.role && data.role !== "admin") {
@@ -135,6 +136,7 @@ export const updateUser = createServerFn({ method: "POST" })
 
     await supabaseAdmin.from("audit_logs").insert({
       user_id: context.userId,
+      user_email: actorEmail,
       action: "user_updated",
       entity: "user",
       entity_id: data.userId,
@@ -150,7 +152,7 @@ export const deleteUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => deleteUserSchema.parse(input))
   .handler(async ({ data, context }) => {
-    await assertAdmin(context.userId);
+    const { email: actorEmail } = await assertAdmin(context.userId);
     if (data.userId === context.userId) {
       throw new Error("You cannot delete your own account.");
     }
@@ -159,6 +161,7 @@ export const deleteUser = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     await supabaseAdmin.from("audit_logs").insert({
       user_id: context.userId,
+      user_email: actorEmail,
       action: "user_deleted",
       entity: "user",
       entity_id: data.userId,

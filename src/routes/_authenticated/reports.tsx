@@ -78,7 +78,7 @@ function ReportsPage() {
   const filteredStudents = students.filter((s) => {
     if (s.status !== "active") return false;
     const mc = filterClass === "all" || s.class === filterClass;
-    const mb = filterBoard === "all" || (s as any).board === filterBoard;
+    const mb = filterBoard === "all" || s.board === filterBoard;
     const mm = filterMedium === "all" || s.medium === filterMedium;
     return mc && mb && mm;
   });
@@ -220,7 +220,7 @@ function ReportsPage() {
             <ExportButtons exporters={exportAll(
               "Students List",
               ["Name", "Mobile", "Class", "Board", "Medium", "Batch", "Fees", "Status"],
-              filteredStudents.map((s) => [s.name, s.mobile, s.class, (s as any).board ?? "", s.medium, s.batch, Number(s.total_fees) - Number(s.discount), s.status]),
+              filteredStudents.map((s) => [s.name, s.mobile, s.class, s.board ?? "", s.medium, s.batch, Number(s.total_fees) - Number(s.discount), s.status]),
               "students"
             )} />
           </div>
@@ -235,7 +235,7 @@ function ReportsPage() {
                     <TableCell className="font-medium">{s.name}</TableCell>
                     <TableCell>{s.mobile}</TableCell>
                     <TableCell>{s.class}</TableCell>
-                    <TableCell>{(s as any).board}</TableCell>
+                    <TableCell>{s.board}</TableCell>
                     <TableCell>{s.medium}</TableCell>
                     <TableCell>{s.batch}</TableCell>
                     <TableCell>₹{(Number(s.total_fees) - Number(s.discount)).toLocaleString("en-IN")}</TableCell>
