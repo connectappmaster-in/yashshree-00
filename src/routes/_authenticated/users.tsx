@@ -26,10 +26,12 @@ import {
 import { Plus, Pencil, Trash2, Shield, GraduationCap, UserCog, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { requireAdmin } from "@/lib/route-guards";
+import { RouteError } from "@/components/RouteError";
 
 export const Route = createFileRoute("/_authenticated/users")({
   beforeLoad: requireAdmin,
   component: UsersPage,
+  errorComponent: RouteError,
 });
 
 type FormState = {
