@@ -85,9 +85,13 @@ function AuditPage() {
       if (dateTo) q = q.lte("created_at", `${dateTo}T23:59:59`);
       if (search.trim()) {
         // Escape PostgREST special chars in `or()` filter strings (commas split filters,
-        // parens group, % and _ are LIKE wildcards). Without this, a single `,` or `(` in
-        // the search box throws a 400 from the API.
-        const s = search.trim().replace(/([,()*])/g, "\\$1").replace(/%/g, "\\%").replace(/_/g, "\\_");
+        // parens group, % and _ are LIKE wildcards, backslash is the escape char itself).
+        // Without this, a single `,` `(` or `\` in the search box throws a 400 from the API.
+        const s = search.trim()
+          .replace(/\\/g, "\\\\")
+          .replace(/([,()*])/g, "\\$1")
+          .replace(/%/g, "\\%")
+          .replace(/_/g, "\\_");
         q = q.or(`user_email.ilike.%${s}%,entity_id.ilike.%${s}%`);
       }
       const from = page * PAGE_SIZE;
