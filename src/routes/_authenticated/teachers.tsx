@@ -122,6 +122,7 @@ function TeachersPage() {
         <TabsList>
           <TabsTrigger value="salary">Salary & Lectures</TabsTrigger>
           <TabsTrigger value="attendance">Attendance</TabsTrigger>
+          <TabsTrigger value="classes">Assigned Classes</TabsTrigger>
         </TabsList>
 
         <TabsContent value="salary" className="mt-3">
@@ -200,6 +201,10 @@ function TeachersPage() {
 
         <TabsContent value="attendance" className="mt-3">
           <TeacherAttendanceView teachers={teachers} attRecords={teacherAtt} year={year} />
+        </TabsContent>
+
+        <TabsContent value="classes" className="mt-3">
+          <TeacherClassesView teachers={teachers} year={year} />
         </TabsContent>
       </Tabs>
 
@@ -436,5 +441,106 @@ function LectureForm({ teacherId, teachers, defaultYear, onSuccess }: { teacherI
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+const CLASS_OPTIONS = ["5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th", "Other"];
+const BATCH_OPTIONS = ["morning", "evening"]; // Stored lowercase to match students.batch
+
+function TeacherClassesView({ teachers, year }: { teachers: Tables<"teachers">[]; year: string }) {
+  const queryClient = useQueryClient();
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string>(teachers[0]?.id ?? "");
+
+  const { data: assignments = [] } = useQuery({
+    queryKey: ["teacher_classes", year],
+    queryFn: async () => {
+      const { data } = await supabase.from("teacher_classes").select("*").eq("academic_year", year);
+      return data || [];
+    },
+  });
+
+  const teacherAssignments = assignments.filter((a) => a.teacher_id === selectedTeacherId);
+  const isAssigned = (cls: string, batch: string) =>
+    teacherAssignments.some((a) => a.class === cls && a.batch === batch);
+
+  const toggleMut = useMutation({
+    mutationFn: async ({ cls, batch }: { cls: string; batch: string }) => {
+      if (!selectedTeacherId) throw new Error("Select a teacher first");
+      const existing = teacherAssignments.find((a) => a.class === cls && a.batch === batch);
+      if (existing) {
+        const { error } = await supabase.from("teacher_classes").delete().eq("id", existing.id);
+        if (error) throw error;
+        await logAudit("teacher_class_unassigned", "teacher_classes", existing.id, { teacher_id: selectedTeacherId, class: cls, batch, academic_year: year });
+      } else {
+        const { data: ins, error } = await supabase
+          .from("teacher_classes")
+          .insert({ teacher_id: selectedTeacherId, class: cls, batch, academic_year: year })
+          .select("id")
+          .single();
+        if (error) throw error;
+        await logAudit("teacher_class_assigned", "teacher_classes", ins?.id ?? null, { teacher_id: selectedTeacherId, class: cls, batch, academic_year: year });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["teacher_classes", year] });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const selectedTeacher = teachers.find((t) => t.id === selectedTeacherId);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-end gap-3 flex-wrap">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Teacher</Label>
+            <Select value={selectedTeacherId} onValueChange={setSelectedTeacherId}>
+              <SelectTrigger className="w-[240px]"><SelectValue placeholder="Choose teacher" /></SelectTrigger>
+              <SelectContent>
+                {teachers.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>{t.name} — {t.subject}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="text-xs text-muted-foreground ml-auto max-w-md">
+            Tick the class+batch combinations this teacher is allowed to mark attendance for. Required for AY {year}.
+          </p>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        {!selectedTeacher ? (
+          <div className="py-12 text-center text-muted-foreground text-sm">Add a teacher first.</div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Class</TableHead>
+                {BATCH_OPTIONS.map((b) => (
+                  <TableHead key={b} className="text-center capitalize">{b}</TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {CLASS_OPTIONS.map((cls) => (
+                <TableRow key={cls} className="hover:bg-muted/50">
+                  <TableCell className="font-medium">{cls}</TableCell>
+                  {BATCH_OPTIONS.map((batch) => (
+                    <TableCell key={batch} className="text-center">
+                      <Checkbox
+                        checked={isAssigned(cls, batch)}
+                        disabled={toggleMut.isPending}
+                        onCheckedChange={() => toggleMut.mutate({ cls, batch })}
+                      />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
   );
 }
