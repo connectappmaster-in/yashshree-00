@@ -182,15 +182,17 @@ function AdminDashboard() {
     name: c,
     value: classCounts[c],
   }));
+  // Hex palette (theme-independent) so every slice always renders, even if a
+  // particular CSS token isn't defined in the active theme.
   const PIE_COLORS = [
-    "var(--primary)",
-    "var(--accent)",
-    "var(--success)",
-    "var(--secondary)",
-    "var(--destructive)",
-    "var(--muted-foreground)",
-    "var(--warning)",
-    "var(--info, #6366f1)",
+    "#3b82f6", // blue
+    "#10b981", // green
+    "#f59e0b", // amber
+    "#8b5cf6", // violet
+    "#ef4444", // red
+    "#06b6d4", // cyan
+    "#ec4899", // pink
+    "#6366f1", // indigo
   ];
 
   // Attendance % this month
