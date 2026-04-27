@@ -66,7 +66,7 @@ function UsersPage() {
       const { data } = await supabase.from("teachers").select("id, name, subject").order("name");
       return data || [];
     },
-    enabled: isReady && isAdmin,
+    enabled: isReady,
   });
 
   const createMut = useMutation({
