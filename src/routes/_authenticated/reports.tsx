@@ -19,10 +19,12 @@ import { exportCSV, exportExcel, exportPDF } from "@/lib/export-utils";
 import { safeNum, buildWhatsappUrl } from "@/lib/format";
 import { requireAdmin } from "@/lib/route-guards";
 import { logAudit } from "@/lib/audit";
+import { RouteError } from "@/components/RouteError";
 
 export const Route = createFileRoute("/_authenticated/reports")({
   beforeLoad: requireAdmin,
   component: ReportsPage,
+  errorComponent: RouteError,
 });
 
 const CLASSES = ["5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th"];

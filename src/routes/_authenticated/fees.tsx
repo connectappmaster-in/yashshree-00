@@ -525,8 +525,8 @@ function PaymentForm({ studentId, studentName, remaining, defaultYear, onSuccess
     onSuccess: (id) => {
       toast.success("Payment recorded");
       if (id) setSavedPaymentId(id);
-      // Defer closing the dialog so the user can print the receipt with the real id.
-      setTimeout(() => onSuccess(), 1500);
+      // Defer closing the dialog so the user has time to print the receipt with the real id.
+      setTimeout(() => onSuccess(), 5000);
     },
     onError: (e) => toast.error(e.message),
   });

@@ -1,4 +1,4 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -26,10 +26,12 @@ import {
 import { Plus, Pencil, Trash2, Shield, GraduationCap, UserCog, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { requireAdmin } from "@/lib/route-guards";
+import { RouteError } from "@/components/RouteError";
 
 export const Route = createFileRoute("/_authenticated/users")({
   beforeLoad: requireAdmin,
   component: UsersPage,
+  errorComponent: RouteError,
 });
 
 type FormState = {
@@ -43,8 +45,7 @@ type FormState = {
 const emptyForm: FormState = { email: "", password: "", full_name: "", role: "teacher", teacher_id: null };
 
 function UsersPage() {
-  const router = useRouter();
-  const { isAdmin, isReady, user: currentUser } = useAuth();
+  const { isReady, user: currentUser } = useAuth();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ManagedUser | null>(null);
@@ -57,7 +58,7 @@ function UsersPage() {
       const res = await listUsers();
       return res.users;
     },
-    enabled: isReady && isAdmin,
+    enabled: isReady,
     retry: 1,
   });
 
@@ -67,7 +68,7 @@ function UsersPage() {
       const { data } = await supabase.from("teachers").select("id, name, subject").order("name");
       return data || [];
     },
-    enabled: isReady && isAdmin,
+    enabled: isReady,
   });
 
   const createMut = useMutation({
@@ -122,14 +123,9 @@ function UsersPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  // Gating: wait for auth state to settle before deciding
+  // beforeLoad already enforces admin access; just wait for auth state to settle.
   if (!isReady) {
     return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
-  }
-  if (!isAdmin) {
-    toast.error("Admin access required");
-    router.navigate({ to: "/dashboard" });
-    return null;
   }
 
   const openCreate = () => {

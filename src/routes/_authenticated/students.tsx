@@ -23,11 +23,13 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { safeNum, inr } from "@/lib/format";
 import { logAudit } from "@/lib/audit";
 import { exportCSV } from "@/lib/export-utils";
+import { RouteError } from "@/components/RouteError";
 
 const CLASS_RANK: Record<string, number> = { "5th": 5, "6th": 6, "7th": 7, "8th": 8, "9th": 9, "10th": 10, "11th": 11, "12th": 12 };
 
 export const Route = createFileRoute("/_authenticated/students")({
   component: StudentsPage,
+  errorComponent: RouteError,
 });
 
 const CLASSES = ["5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th"];
