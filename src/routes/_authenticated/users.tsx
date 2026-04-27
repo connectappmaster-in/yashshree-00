@@ -43,8 +43,7 @@ type FormState = {
 const emptyForm: FormState = { email: "", password: "", full_name: "", role: "teacher", teacher_id: null };
 
 function UsersPage() {
-  const router = useRouter();
-  const { isAdmin, isReady, user: currentUser } = useAuth();
+  const { isReady, user: currentUser } = useAuth();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ManagedUser | null>(null);
