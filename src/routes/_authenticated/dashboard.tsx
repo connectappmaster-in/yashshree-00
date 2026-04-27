@@ -52,6 +52,7 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
+  errorComponent: RouteError,
 });
 
 function DashboardPage() {
