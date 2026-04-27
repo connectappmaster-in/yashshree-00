@@ -56,7 +56,7 @@ function UsersPage() {
       const res = await listUsers();
       return res.users;
     },
-    enabled: isReady && isAdmin,
+    enabled: isReady,
     retry: 1,
   });
 
