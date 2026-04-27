@@ -21,10 +21,12 @@ import { buildWhatsappUrl } from "@/lib/format";
 import { logAudit } from "@/lib/audit";
 import { exportCSV } from "@/lib/export-utils";
 import { EmptyState } from "@/components/EmptyState";
+import { RouteError } from "@/components/RouteError";
 
 export const Route = createFileRoute("/_authenticated/whatsapp-logs")({
   beforeLoad: requireAdmin,
   component: WhatsAppLogsPage,
+  errorComponent: RouteError,
 });
 
 const PAGE_SIZE = 50;
