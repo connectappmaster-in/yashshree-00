@@ -49,6 +49,7 @@ import { useAcademicYear } from "@/lib/academic-year-context";
 import { safeNum, buildWhatsappUrl, nextDueLabel } from "@/lib/format";
 import { CardsSkeleton } from "@/components/ui/loading-skeleton";
 import { toast } from "sonner";
+import { RouteError } from "@/components/RouteError";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
