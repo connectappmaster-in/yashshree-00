@@ -19,9 +19,11 @@ import { useAcademicYear } from "@/lib/academic-year-context";
 import { useAuth } from "@/lib/auth-context";
 import { studentsReadFrom } from "@/lib/students-source";
 import { logAudit } from "@/lib/audit";
+import { RouteError } from "@/components/RouteError";
 
 export const Route = createFileRoute("/_authenticated/tests")({
   component: TestsPage,
+  errorComponent: RouteError,
 });
 
 const CLASSES = ["5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th"];
