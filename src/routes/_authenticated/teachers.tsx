@@ -122,6 +122,7 @@ function TeachersPage() {
         <TabsList>
           <TabsTrigger value="salary">Salary & Lectures</TabsTrigger>
           <TabsTrigger value="attendance">Attendance</TabsTrigger>
+          <TabsTrigger value="classes">Assigned Classes</TabsTrigger>
         </TabsList>
 
         <TabsContent value="salary" className="mt-3">
