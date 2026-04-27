@@ -31,6 +31,7 @@ export type AuditEntity =
   | "teacher"
   | "lecture"
   | "teacher_attendance"
+  | "teacher_classes"
   | "user"
   | "whatsapp"
   | "auth"
