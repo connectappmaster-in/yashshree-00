@@ -30,7 +30,7 @@ export const Route = createFileRoute("/_authenticated/whatsapp-logs")({
 });
 
 const PAGE_SIZE = 50;
-const TYPES = ["reminder", "attendance", "test", "broadcast", "other"];
+const TYPES = ["reminder", "broadcast", "attendance"];
 const CLASSES = ["5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th"];
 const BOARDS = ["CBSE", "SSC"];
 
