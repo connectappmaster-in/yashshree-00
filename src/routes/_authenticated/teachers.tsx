@@ -202,6 +202,10 @@ function TeachersPage() {
         <TabsContent value="attendance" className="mt-3">
           <TeacherAttendanceView teachers={teachers} attRecords={teacherAtt} year={year} />
         </TabsContent>
+
+        <TabsContent value="classes" className="mt-3">
+          <TeacherClassesView teachers={teachers} year={year} />
+        </TabsContent>
       </Tabs>
 
       <Dialog open={lectureDialogOpen} onOpenChange={setLectureDialogOpen}>
