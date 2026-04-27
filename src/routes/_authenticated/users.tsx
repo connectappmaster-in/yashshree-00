@@ -121,14 +121,9 @@ function UsersPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  // Gating: wait for auth state to settle before deciding
+  // beforeLoad already enforces admin access; just wait for auth state to settle.
   if (!isReady) {
     return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
-  }
-  if (!isAdmin) {
-    toast.error("Admin access required");
-    router.navigate({ to: "/dashboard" });
-    return null;
   }
 
   const openCreate = () => {
