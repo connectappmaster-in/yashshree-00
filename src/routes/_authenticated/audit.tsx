@@ -14,10 +14,12 @@ import { exportCSV } from "@/lib/export-utils";
 import { logAudit } from "@/lib/audit";
 import { EmptyState } from "@/components/EmptyState";
 import { requireAdmin } from "@/lib/route-guards";
+import { RouteError } from "@/components/RouteError";
 
 export const Route = createFileRoute("/_authenticated/audit")({
   beforeLoad: requireAdmin,
   component: AuditPage,
+  errorComponent: RouteError,
 });
 
 interface AuditRow {
