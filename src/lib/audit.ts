@@ -18,6 +18,8 @@ export type AuditAction =
   | "user_created"
   | "user_updated"
   | "user_deleted"
+  | "teacher_class_assigned"
+  | "teacher_class_unassigned"
   | "export";
 
 export type AuditEntity =
