@@ -385,10 +385,24 @@ function ReportsPage() {
                 {CLASSES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
+            {showAttStream && (
+              <Select value={attStream} onValueChange={(v) => setAttStream(v as StreamFilter)}>
+                <SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Streams</SelectItem>
+                  <SelectItem value="science">Science</SelectItem>
+                  <SelectItem value="commerce">Commerce</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
             <ExportButtons exporters={exportAll(
               `Attendance ${reportMonth}`,
-              ["Name", "Class", "Present", "Days", "%"],
-              attRows.map((r) => [r.name, r.class, r.present, r.totalDays, `${r.pct}%`]),
+              ["Name", "Class", "Stream", "Present", "Days", "%"],
+              attRows.map((r) => [
+                r.name, r.class,
+                isHigherSecondary(r.class) ? streamLabel((r as unknown as { stream?: string }).stream) : "",
+                r.present, r.totalDays, `${r.pct}%`,
+              ]),
               `attendance_${reportMonth}`
             )} />
           </div>
@@ -397,15 +411,16 @@ function ReportsPage() {
             <CardContent className="p-0">
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>Name</TableHead><TableHead>Class</TableHead><TableHead className="text-right">Present</TableHead><TableHead className="text-right">Days</TableHead><TableHead className="text-right">%</TableHead><TableHead className="text-right">Send</TableHead>
+                  <TableHead>Name</TableHead><TableHead>Class</TableHead><TableHead>Stream</TableHead><TableHead className="text-right">Present</TableHead><TableHead className="text-right">Days</TableHead><TableHead className="text-right">%</TableHead><TableHead className="text-right">Send</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {attRows.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">No active students for this filter</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">No active students for this filter</TableCell></TableRow>
                   ) : attRows.map((r) => (
                     <TableRow key={r.id} className="hover:bg-muted/50">
                       <TableCell className="font-medium">{r.name}</TableCell>
                       <TableCell>{r.class}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{isHigherSecondary(r.class) ? streamLabel((r as unknown as { stream?: string }).stream) : "—"}</TableCell>
                       <TableCell className="text-right">{r.present}</TableCell>
                       <TableCell className="text-right">{r.totalDays}</TableCell>
                       <TableCell className={`text-right font-bold ${r.pct >= 75 ? "text-success" : r.pct >= 50 ? "text-warning-foreground" : "text-destructive"}`}>{r.pct}%</TableCell>
