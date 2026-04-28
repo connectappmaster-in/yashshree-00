@@ -21,6 +21,7 @@ import { useAcademicYear, deriveAcademicYear } from "@/lib/academic-year-context
 import { requireAdmin } from "@/lib/route-guards";
 import { logAudit } from "@/lib/audit";
 import { RouteError } from "@/components/RouteError";
+import { CLASS_OPTIONS as CATALOG_CLASS_OPTIONS } from "@/lib/catalog";
 
 export const Route = createFileRoute("/_authenticated/teachers")({
   beforeLoad: requireAdmin,
