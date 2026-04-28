@@ -157,11 +157,16 @@ function StudentsPage() {
 
   const handleExport = async () => {
     exportCSV(
-      ["Name", "Mobile", "Class", "Board", "Medium", "Batch", "Total Fees", "Discount", "Paid", "Remaining", "Status"],
-      filtered.map((s) => [
-        s.name, s.mobile, s.class, s.board ?? "", s.medium, s.batch,
-        safeNum(s.total_fees), safeNum(s.discount), s.paid, s.remaining, s.status,
-      ]),
+      ["Name", "Mobile", "Class", "Stream", "Board", "Medium", "Batch", "Total Fees", "Discount", "Paid", "Remaining", "Status"],
+      filtered.map((s) => {
+        const st = (s as unknown as { stream?: string }).stream;
+        const streamCol = isHigherSecondary(s.class) && (st === "science" || st === "commerce")
+          ? (st === "science" ? "Science" : "Commerce") : "";
+        return [
+          s.name, s.mobile, s.class, streamCol, s.board ?? "", s.medium, s.batch,
+          safeNum(s.total_fees), safeNum(s.discount), s.paid, s.remaining, s.status,
+        ];
+      }),
       `students_${format(new Date(), "yyyy-MM-dd")}.csv`,
     );
     await logAudit("export", "student", null, { kind: "students", rows: filtered.length });
@@ -301,7 +306,7 @@ function StudentsPage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <h2 className="text-lg font-bold font-display">{selected.name}</h2>
-                      <p className="text-sm text-muted-foreground">{selected.mobile} • {selected.class} • {selected.board} {selected.medium} • {selected.batch} Batch</p>
+                      <p className="text-sm text-muted-foreground">{selected.mobile} • {selected.class}{isHigherSecondary(selected.class) && (selected as unknown as { stream?: string }).stream && (selected as unknown as { stream?: string }).stream !== "none" ? ` ${((selected as unknown as { stream?: string }).stream === "science" ? "Science" : "Commerce")}` : ""} • {selected.board} {selected.medium} • {selected.batch} Batch</p>
                       <p className="text-xs text-muted-foreground mt-1">Due Day: {selected.fee_due_day}th • Admitted: {format(new Date(selected.admission_date), "dd MMM yyyy")}</p>
                     </div>
                     <div className="flex gap-1">
