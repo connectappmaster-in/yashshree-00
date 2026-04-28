@@ -78,12 +78,18 @@ function ReportsPage() {
   });
 
   // Students tab — only active students (matches Pending Fees tab so counts are consistent)
+  const showStudentsStream = filterClass === "all" || isHigherSecondary(filterClass);
+  const effectiveStudentsStream: StreamFilter = showStudentsStream ? filterStream : "all";
+  const matchesStudentsStream = (s: { class: string; stream?: string | null }) =>
+    effectiveStudentsStream === "all" ||
+    (isHigherSecondary(s.class) && (s.stream ?? "none") === effectiveStudentsStream);
+
   const filteredStudents = students.filter((s) => {
     if (s.status !== "active") return false;
     const mc = filterClass === "all" || s.class === filterClass;
     const mb = filterBoard === "all" || s.board === filterBoard;
     const mm = filterMedium === "all" || s.medium === filterMedium;
-    return mc && mb && mm;
+    return mc && mb && mm && matchesStudentsStream(s as unknown as { class: string; stream?: string | null });
   });
   const filterMediumOptions = filterBoard === "all" ? ALL_MEDIUMS : MEDIUMS_BY_BOARD[filterBoard as Board];
 
@@ -92,8 +98,12 @@ function ReportsPage() {
     queryKey: ["payments-all"],
     queryFn: async () => (await supabase.from("payments").select("*")).data || [],
   });
-  // Active students for current AY — used by both Students tab and Pending so counts match
-  const activeStudents = students.filter((s) => s.status === "active" && s.academic_year === year);
+  // Active students for current AY — used by both Students tab and Pending so counts match.
+  // Pending tab honours the same Stream filter as Students tab.
+  const activeStudents = students.filter(
+    (s) => s.status === "active" && s.academic_year === year &&
+      matchesStudentsStream(s as unknown as { class: string; stream?: string | null }),
+  );
   const pendingData = activeStudents.map((s) => {
     const paid = allPayments.filter((p) => p.student_id === s.id).reduce((sum, p) => sum + safeNum(p.amount), 0);
     const total = safeNum(s.total_fees) - safeNum(s.discount);
@@ -117,8 +127,18 @@ function ReportsPage() {
   });
   const totalSalary = teacherSalaryData.reduce((sum, t) => sum + t.salary, 0);
 
-  // Attendance per student (this month) — uses its own class filter; AY-scoped via students query
-  const attRows = students.filter((s) => s.status === "active" && s.academic_year === year && (attClass === "all" || s.class === attClass)).map((s) => {
+  // Attendance per student (this month) — uses its own class + stream filter; AY-scoped via students query
+  const showAttStream = attClass === "all" || isHigherSecondary(attClass);
+  const effectiveAttStream: StreamFilter = showAttStream ? attStream : "all";
+  const attRows = students.filter((s) => {
+    if (s.status !== "active" || s.academic_year !== year) return false;
+    if (attClass !== "all" && s.class !== attClass) return false;
+    if (effectiveAttStream !== "all") {
+      const st = (s as unknown as { stream?: string }).stream;
+      if (!isHigherSecondary(s.class) || st !== effectiveAttStream) return false;
+    }
+    return true;
+  }).map((s) => {
     const recs = allAttendance.filter((a) => a.student_id === s.id && a.date >= monthStart && a.date <= monthEnd);
     const present = recs.filter((r) => r.status === "present").length;
     const total = recs.length;
