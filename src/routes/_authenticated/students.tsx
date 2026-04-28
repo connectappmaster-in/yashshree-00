@@ -695,7 +695,7 @@ function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"stu
       </div>
       <div className="pt-2 flex items-center justify-between">
         <p className="text-sm text-muted-foreground">Final: <span className="font-bold text-foreground">₹{Math.max(0, finalFees).toLocaleString("en-IN")}</span></p>
-        <Button type="submit" className="bg-secondary text-secondary-foreground hover:bg-secondary/90" disabled={mutation.isPending}>
+        <Button type="submit" className="bg-secondary text-secondary-foreground hover:bg-secondary/90" disabled={mutation.isPending || form.subjects.length === 0 || (showStream && form.stream === "none")}>
           {mutation.isPending ? "Saving..." : student ? "Update" : "Add Student"}
         </Button>
       </div>
