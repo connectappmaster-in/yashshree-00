@@ -32,24 +32,19 @@ export const Route = createFileRoute("/_authenticated/students")({
   errorComponent: RouteError,
 });
 
-const CLASSES = ["5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th"];
-const BOARDS = ["CBSE", "SSC"] as const;
-type Board = (typeof BOARDS)[number];
-const MEDIUMS_BY_BOARD: Record<Board, string[]> = {
-  CBSE: ["English"],
-  SSC: ["Marathi", "Semi English", "English"],
-};
-const ALL_MEDIUMS = ["Marathi", "Semi English", "English"];
-const SUBJECTS_BY_CLASS: Record<string, string[]> = {
-  "5th": ["Maths", "Science", "English", "Hindi", "Social Science"],
-  "6th": ["Maths", "Science", "English", "Hindi", "Social Science"],
-  "7th": ["Maths", "Science", "English", "Hindi", "Social Science"],
-  "8th": ["Maths", "Science", "English", "Hindi", "Social Science"],
-  "9th": ["Maths", "Science", "English", "Hindi", "Social Science"],
-  "10th": ["Maths", "Science", "English", "Hindi", "Social Science"],
-  "11th": ["Physics", "Chemistry", "Maths", "Biology", "English", "Accountancy", "Economics", "Business Studies"],
-  "12th": ["Physics", "Chemistry", "Maths", "Biology", "English", "Accountancy", "Economics", "Business Studies"],
-};
+import {
+  BOARDS,
+  type Board,
+  MEDIUMS_BY_BOARD,
+  ALL_MEDIUMS,
+  CLASS_OPTIONS,
+  STREAM_OPTIONS,
+  type Stream,
+  getSubjectsFor,
+  isHigherSecondary,
+} from "@/lib/catalog";
+
+const CLASSES = CLASS_OPTIONS;
 const BATCHES = ["Morning", "Evening"];
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
