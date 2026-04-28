@@ -287,11 +287,21 @@ function ReportsPage() {
         </TabsContent>
 
         <TabsContent value="pending" className="mt-4 space-y-4">
-          <div className="flex justify-end">
+          <div className="flex justify-between items-center gap-2 flex-wrap">
+            <p className="text-xs text-muted-foreground">
+              Inherits Class & Stream filters from the Students tab.
+              {showStudentsStream && filterStream !== "all" && (
+                <> Showing <span className="font-semibold text-foreground">{streamLabel(filterStream)}</span> only.</>
+              )}
+            </p>
             <ExportButtons exporters={exportAll(
               "Pending Fees",
-              ["Name", "Class", "Total", "Paid", "Remaining"],
-              pendingData.map((s) => [s.name, s.class, s.total, s.paid, s.remaining]),
+              ["Name", "Class", "Stream", "Total", "Paid", "Remaining"],
+              pendingData.map((s) => [
+                s.name, s.class,
+                isHigherSecondary(s.class) ? streamLabel((s as unknown as { stream?: string }).stream) : "",
+                s.total, s.paid, s.remaining,
+              ]),
               "pending_fees"
             )} />
           </div>
@@ -300,13 +310,14 @@ function ReportsPage() {
             <CardContent className="p-0">
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>Name</TableHead><TableHead>Class</TableHead><TableHead className="text-right">Total</TableHead><TableHead className="text-right">Paid</TableHead><TableHead className="text-right">Remaining</TableHead>
+                  <TableHead>Name</TableHead><TableHead>Class</TableHead><TableHead>Stream</TableHead><TableHead className="text-right">Total</TableHead><TableHead className="text-right">Paid</TableHead><TableHead className="text-right">Remaining</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {pendingData.map((s) => (
                     <TableRow key={s.id}>
                       <TableCell className="font-medium">{s.name}</TableCell>
                       <TableCell>{s.class}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{isHigherSecondary(s.class) ? streamLabel((s as unknown as { stream?: string }).stream) : "—"}</TableCell>
                       <TableCell className="text-right">₹{s.total.toLocaleString("en-IN")}</TableCell>
                       <TableCell className="text-right">₹{s.paid.toLocaleString("en-IN")}</TableCell>
                       <TableCell className="text-right font-bold text-destructive">₹{s.remaining.toLocaleString("en-IN")}</TableCell>
