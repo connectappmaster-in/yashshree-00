@@ -543,6 +543,7 @@ function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"stu
         board: form.board,
         medium: form.medium,
         subjects: form.subjects,
+        stream: form.stream,
         admission_date: form.admission_date,
         total_fees: safeNum(form.total_fees),
         discount: safeNum(form.discount),
