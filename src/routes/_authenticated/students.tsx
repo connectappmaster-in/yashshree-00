@@ -233,6 +233,16 @@ function StudentsPage() {
                     {filterMediumOptions.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {showStreamFilter && (
+                  <Select value={filterStream} onValueChange={(v) => setFilterStream(v as "all" | "science" | "commerce")}>
+                    <SelectTrigger className="w-[110px] h-8 text-xs"><SelectValue placeholder="Stream" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Streams</SelectItem>
+                      <SelectItem value="science">Science</SelectItem>
+                      <SelectItem value="commerce">Commerce</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -253,8 +263,8 @@ function StudentsPage() {
                       <TableRow><TableCell colSpan={3} className="text-center py-8 text-sm text-muted-foreground">Loading...</TableCell></TableRow>
                     ) : filtered.length === 0 ? (
                       <TableRow><TableCell colSpan={3} className="text-center py-8 text-sm text-muted-foreground">
-                        {(search || filterClass !== "all" || filterBoard !== "all" || filterMedium !== "all")
-                          ? <>No students match your filters. <button type="button" onClick={() => { setSearch(""); setFilterClass("all"); setFilterBoard("all"); setFilterMedium("all"); }} className="underline">Clear filters</button></>
+                        {(search || filterClass !== "all" || filterBoard !== "all" || filterMedium !== "all" || filterStream !== "all")
+                          ? <>No students match your filters. <button type="button" onClick={() => { setSearch(""); setFilterClass("all"); setFilterBoard("all"); setFilterMedium("all"); setFilterStream("all"); }} className="underline">Clear filters</button></>
                           : "No students found"}
                       </TableCell></TableRow>
                     ) : (
