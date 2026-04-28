@@ -1,78 +1,89 @@
-# Update Subjects, Boards, and add 11/12 Stream
+## Goal
 
-Standardize subject names, expand boards, and split 11/12 subjects into separate **Science** and **Commerce** streams (not combined).
+Five focused improvements across fees, students, reports, and database security — all on top of the existing `stream` column and `src/lib/catalog.ts` catalog.
 
-## New canonical lists
+---
 
-**Boards** (4): `SSC`, `CBSE`, `ICSE`, `IB`
+### 1. Richer fee-reminder WhatsApp messages + logs (`fees.tsx`)
 
-**Subjects for 5th–10th** (standardized names):
-- Marathi, Hindi, Sanskrit, English, Mathematics, Science, Social Science
+Update both single and bulk reminder builders so the message and the `whatsapp_logs` row reflect the standardized class/stream and use the student's actual pending fees + due-date.
 
-**Subjects for 11th & 12th — Science stream**:
-- Physics, Chemistry, Mathematics, Biology, English, Information Technology, Marathi, Hindi
+- New helper `buildReminderMessage(s)` (local to `fees.tsx`) producing:
+  > `Hello {name}, your pending fees for Yashshree Classes ({class}{ • Stream Science|Commerce if 11/12}) is ₹{remaining}. Please pay before {nextDueLabel(fee_due_day)}. Thank you.`
+- Guard against negative/zero remaining (`Math.max(0, s.remaining)`); skip students whose `remaining <= 0` (already filtered).
+- `whatsapp_logs.insert` payload stays the same (only `student_id`, `message`, `type`), but the `message` now contains the new info. Audit log details extended with `class`, `stream`, `due_day`, `remaining`.
 
-**Subjects for 11th & 12th — Commerce stream**:
-- Accountancy, Economics, Secretarial Practice, Organisation of Commerce, Mathematics, English, Information Technology, Geography, Marathi, Hindi
+### 2. Stream filter on Students page (`students.tsx`)
 
-### Naming standardization (applied everywhere)
-- `Maths` → `Mathematics`
-- `Account` → `Accountancy`
-- `IT` → `Information Technology`
-- `SP` → `Secretarial Practice`
-- `OC` → `Organisation of Commerce`
-- `Sasnkrit` (typo in spec) → `Sanskrit`
+- Add `filterStream` state (`"all" | "science" | "commerce"`).
+- Render the `<Select>` only when `filterClass` is `"11th"`, `"12th"`, or `"all"`. When `filterClass` is 5–10, hide the stream select and force `filterStream = "all"`.
+- Filter logic: when `filterStream !== "all"`, keep only students where `isHigherSecondary(s.class) && s.stream === filterStream`.
+- Include in the "Clear filters" reset and in the empty-state copy.
+- Add stream column hint to the right-hand detail panel header (e.g. `… • 11th Science • CBSE …`).
 
-## Database change (1 migration)
+### 3. Stream-aware Reports (`reports.tsx`)
 
-Add a `stream` column to `students` to keep 11/12 Science vs Commerce separate:
+- Add `filterStream` state used by the **Students** and **Pending Fees** tabs (top-level filter — same control rendered inside both tab headers OR moved into a shared filter row above the tabs; we'll inline-render in each of those two tabs to keep scope tight).
+- Add `attStream` for the **Attendance** tab, mirroring the existing `attClass` selector.
+- All three filters: only render the dropdown if the relevant class filter is `"all"`, `"11th"`, or `"12th"`; otherwise hide & treat as `"all"`.
+- Apply `s.stream === filterStream` in `filteredStudents`, `pendingData` (currently from `activeStudents`), and `attRows`.
+- Extend the Students export header/rows with a `Stream` column (value `s.stream === 'none' ? '' : capitalize(s.stream)`); same for Pending Fees and Attendance exports for completeness.
 
-```sql
-ALTER TABLE public.students
-  ADD COLUMN stream text NOT NULL DEFAULT 'none';
--- values: 'science' | 'commerce' | 'none' (for 5th–10th)
+### 4. Subject ↔ class/stream validation (`students.tsx` `StudentForm`)
+
+In the `mutationFn`, before the insert/update payload:
+
+```ts
+const allowed = new Set(getSubjectsFor(form.class, form.stream));
+const invalid = form.subjects.filter((s) => !allowed.has(s));
+if (form.subjects.length === 0) throw new Error("Select at least one subject");
+if (invalid.length) throw new Error(`Subjects not valid for ${form.class}${showStream ? ` ${form.stream}` : ""}: ${invalid.join(", ")}`);
+if (isHigherSecondary(form.class) && form.stream === "none") throw new Error("Select a stream for 11th/12th");
 ```
 
-Free-text default keeps existing rows valid (`'none'`). No RLS change needed (inherits existing policies).
+(Class/stream changes already clear `subjects: []`, so existing edits stay consistent.) Also disable the Submit button when `form.subjects.length === 0` for clearer UX.
 
-## Code changes
+### 5. Supabase security linter — fix SECURITY DEFINER + leaked-password warnings
 
-### 1. New shared catalog — `src/lib/catalog.ts`
-Single source of truth so `students.tsx`, `reports.tsx`, `teachers.tsx` all import the same lists:
-- `BOARDS`, `Board`, `MEDIUMS_BY_BOARD`, `ALL_MEDIUMS`
-- `CLASS_OPTIONS`
-- `Stream` type (`'science' | 'commerce' | 'none'`)
-- `getSubjectsFor(class, stream)` → returns the right list (5–10 ignores stream; 11/12 returns Science or Commerce list)
+Linter currently reports 11 warnings. Plan:
 
-### 2. `src/routes/_authenticated/students.tsx`
-- Replace local `BOARDS`, `MEDIUMS_BY_BOARD`, `SUBJECTS_BY_CLASS` with imports from `catalog.ts`.
-- Add `stream` to form state; default `'none'`.
-- When class changes to `11th`/`12th`, show a **Stream** select (Science / Commerce) and auto-clear `subjects`.
-- Hide the Stream select for 5th–10th and force `stream: 'none'`.
-- Use `getSubjectsFor(form.class, form.stream)` for the subject checklist.
-- Persist `stream` on insert/update.
-- `MEDIUMS_BY_BOARD` defaults: `ICSE: ['English']`, `IB: ['English']`.
+**A. SECURITY DEFINER functions exposed to `anon`/`authenticated` (warnings 1–10)**
 
-### 3. `src/routes/_authenticated/reports.tsx`
-- Import `BOARDS`, `MEDIUMS_BY_BOARD`, `ALL_MEDIUMS` from `catalog.ts`.
-- Add an optional **Stream** filter (All / Science / Commerce / None) in the same row as the board/medium filters — useful for 11/12 reporting.
+For each function below, `REVOKE EXECUTE … FROM PUBLIC, anon, authenticated` so only the role that actually needs to call it via SQL can. Most are only invoked from RLS policies / other definer functions, where executor permissions are not required.
 
-### 4. `src/routes/_authenticated/teachers.tsx`
-- Import `CLASS_OPTIONS` from `catalog.ts` (drop local re-declaration).
+| Function | Caller | Action |
+|---|---|---|
+| `public.has_role(uuid, app_role)` | RLS policies (definer context) | Revoke from `anon, authenticated, public` |
+| `public.current_user_teacher_id()` | RLS policies | Revoke from `anon, authenticated, public` |
+| `public.current_user_teacher_subject()` | RLS policies | Revoke from `anon, authenticated, public` |
+| `public.teacher_can_mark_student(uuid)` | RLS policies | Revoke from `anon, authenticated, public` |
+| `public.get_students_safe()` | Not used by client (we read the `students_safe` view directly) | Revoke from `anon, authenticated, public` |
+| `public.log_audit_event(...)` | Called from app via `rpc()` by signed-in users | Keep `EXECUTE` for `authenticated`; revoke from `anon, public` |
+| `public.log_audit_event_anon(...)` | Called from login screen pre-auth | Keep `EXECUTE` for `anon, authenticated`; revoke from `public` |
+| `public.rls_auto_enable()` | Event trigger only | Revoke from `anon, authenticated, public` |
 
-### 5. `src/integrations/supabase/types.ts`
-Auto-regenerated after the migration — no manual edit.
+Migration: a single SQL file with the `REVOKE` / scoped `GRANT` statements above. RLS policies and triggers continue to work because they run with the function owner's privileges.
 
-## Out of scope
+**B. Leaked-password protection (linter warnings 11)**
 
-- Existing student rows keep their old free-text subject values (e.g. `"Maths"`, `"Business Studies"`). They remain readable. If you also want a one-time data normalization pass (rename existing values in the DB to the new standard names, and infer `stream` from existing 11/12 subjects), say so and I'll add it as a separate data update step.
-- `tests.subject` and `teachers.subject` are free-text — new entries will pick from the standardized list, old entries unchanged.
+This is an Auth setting, not SQL. The migration cannot toggle it; we will:
+- Document the one-click action in chat ("Auth → Providers → Email → enable *Leaked password protection*"),
+- Provide the dashboard link in `<lov-actions>`.
 
-## Verification
+**C. Re-run linter** after the migration to confirm warnings 1–10 disappear; warning 11 will remain only until the user toggles the auth setting.
 
-After implementation:
-- New student form for 11th/12th shows a Stream select; subjects update accordingly and stay separate.
-- 5th–10th forms show the 7-subject standardized list, no stream picker.
-- Board dropdown shows all 4 boards in students form and reports filter.
-- All subject names use full standard names project-wide.
-- Build passes.
+---
+
+### Files touched
+
+- `src/routes/_authenticated/fees.tsx` — reminder builder, audit details
+- `src/routes/_authenticated/students.tsx` — stream filter + form validation
+- `src/routes/_authenticated/reports.tsx` — stream filter on Students/Pending/Attendance tabs + export columns
+- `supabase/migrations/<timestamp>_lock_down_definer_execute.sql` — REVOKE/GRANT statements
+
+No schema changes, no data migrations, no new dependencies.
+
+### Out of scope (not requested)
+
+- Backfilling `subjects` for existing rows that no longer match the new catalog (rows remain editable; validation triggers only on save).
+- Changing the bulk-reminder cadence / popup behaviour.

@@ -27,9 +27,12 @@ export const Route = createFileRoute("/_authenticated/reports")({
   errorComponent: RouteError,
 });
 
-import { BOARDS, type Board, MEDIUMS_BY_BOARD, ALL_MEDIUMS, CLASS_OPTIONS } from "@/lib/catalog";
+import { BOARDS, type Board, MEDIUMS_BY_BOARD, ALL_MEDIUMS, CLASS_OPTIONS, isHigherSecondary } from "@/lib/catalog";
 
 const CLASSES = CLASS_OPTIONS;
+type StreamFilter = "all" | "science" | "commerce";
+const streamLabel = (s: string | null | undefined) =>
+  s === "science" ? "Science" : s === "commerce" ? "Commerce" : "";
 type Frequency = "Weekly" | "Monthly" | "Quarterly" | "Yearly";
 
 function ReportsPage() {
@@ -37,7 +40,9 @@ function ReportsPage() {
   const [filterClass, setFilterClass] = useState("all");
   const [filterBoard, setFilterBoard] = useState("all");
   const [filterMedium, setFilterMedium] = useState("all");
+  const [filterStream, setFilterStream] = useState<StreamFilter>("all");
   const [attClass, setAttClass] = useState("all");
+  const [attStream, setAttStream] = useState<StreamFilter>("all");
   const [reportMonth, setReportMonth] = useState(format(new Date(), "yyyy-MM"));
   const [waDialogOpen, setWaDialogOpen] = useState(false);
   const [waStudent, setWaStudent] = useState<{ id: string; name: string; mobile: string } | null>(null);
@@ -73,12 +78,18 @@ function ReportsPage() {
   });
 
   // Students tab — only active students (matches Pending Fees tab so counts are consistent)
+  const showStudentsStream = filterClass === "all" || isHigherSecondary(filterClass);
+  const effectiveStudentsStream: StreamFilter = showStudentsStream ? filterStream : "all";
+  const matchesStudentsStream = (s: { class: string; stream?: string | null }) =>
+    effectiveStudentsStream === "all" ||
+    (isHigherSecondary(s.class) && (s.stream ?? "none") === effectiveStudentsStream);
+
   const filteredStudents = students.filter((s) => {
     if (s.status !== "active") return false;
     const mc = filterClass === "all" || s.class === filterClass;
     const mb = filterBoard === "all" || s.board === filterBoard;
     const mm = filterMedium === "all" || s.medium === filterMedium;
-    return mc && mb && mm;
+    return mc && mb && mm && matchesStudentsStream(s as unknown as { class: string; stream?: string | null });
   });
   const filterMediumOptions = filterBoard === "all" ? ALL_MEDIUMS : MEDIUMS_BY_BOARD[filterBoard as Board];
 
@@ -87,8 +98,12 @@ function ReportsPage() {
     queryKey: ["payments-all"],
     queryFn: async () => (await supabase.from("payments").select("*")).data || [],
   });
-  // Active students for current AY — used by both Students tab and Pending so counts match
-  const activeStudents = students.filter((s) => s.status === "active" && s.academic_year === year);
+  // Active students for current AY — used by both Students tab and Pending so counts match.
+  // Pending tab honours the same Stream filter as Students tab.
+  const activeStudents = students.filter(
+    (s) => s.status === "active" && s.academic_year === year &&
+      matchesStudentsStream(s as unknown as { class: string; stream?: string | null }),
+  );
   const pendingData = activeStudents.map((s) => {
     const paid = allPayments.filter((p) => p.student_id === s.id).reduce((sum, p) => sum + safeNum(p.amount), 0);
     const total = safeNum(s.total_fees) - safeNum(s.discount);
@@ -112,8 +127,18 @@ function ReportsPage() {
   });
   const totalSalary = teacherSalaryData.reduce((sum, t) => sum + t.salary, 0);
 
-  // Attendance per student (this month) — uses its own class filter; AY-scoped via students query
-  const attRows = students.filter((s) => s.status === "active" && s.academic_year === year && (attClass === "all" || s.class === attClass)).map((s) => {
+  // Attendance per student (this month) — uses its own class + stream filter; AY-scoped via students query
+  const showAttStream = attClass === "all" || isHigherSecondary(attClass);
+  const effectiveAttStream: StreamFilter = showAttStream ? attStream : "all";
+  const attRows = students.filter((s) => {
+    if (s.status !== "active" || s.academic_year !== year) return false;
+    if (attClass !== "all" && s.class !== attClass) return false;
+    if (effectiveAttStream !== "all") {
+      const st = (s as unknown as { stream?: string }).stream;
+      if (!isHigherSecondary(s.class) || st !== effectiveAttStream) return false;
+    }
+    return true;
+  }).map((s) => {
     const recs = allAttendance.filter((a) => a.student_id === s.id && a.date >= monthStart && a.date <= monthEnd);
     const present = recs.filter((r) => r.status === "present").length;
     const total = recs.length;
@@ -215,17 +240,32 @@ function ReportsPage() {
                 {filterMediumOptions.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
               </SelectContent>
             </Select>
+            {showStudentsStream && (
+              <Select value={filterStream} onValueChange={(v) => setFilterStream(v as StreamFilter)}>
+                <SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Streams</SelectItem>
+                  <SelectItem value="science">Science</SelectItem>
+                  <SelectItem value="commerce">Commerce</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
             <ExportButtons exporters={exportAll(
               "Students List",
-              ["Name", "Mobile", "Class", "Board", "Medium", "Batch", "Fees", "Status"],
-              filteredStudents.map((s) => [s.name, s.mobile, s.class, s.board ?? "", s.medium, s.batch, Number(s.total_fees) - Number(s.discount), s.status]),
+              ["Name", "Mobile", "Class", "Stream", "Board", "Medium", "Batch", "Fees", "Status"],
+              filteredStudents.map((s) => [
+                s.name, s.mobile, s.class,
+                isHigherSecondary(s.class) ? streamLabel((s as unknown as { stream?: string }).stream) : "",
+                s.board ?? "", s.medium, s.batch,
+                Number(s.total_fees) - Number(s.discount), s.status,
+              ]),
               "students"
             )} />
           </div>
           <Card><CardContent className="p-0">
             <Table>
               <TableHeader><TableRow>
-                <TableHead>Name</TableHead><TableHead>Mobile</TableHead><TableHead>Class</TableHead><TableHead>Board</TableHead><TableHead>Medium</TableHead><TableHead>Batch</TableHead><TableHead>Fees</TableHead><TableHead>Status</TableHead>
+                <TableHead>Name</TableHead><TableHead>Mobile</TableHead><TableHead>Class</TableHead><TableHead>Stream</TableHead><TableHead>Board</TableHead><TableHead>Medium</TableHead><TableHead>Batch</TableHead><TableHead>Fees</TableHead><TableHead>Status</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {filteredStudents.map((s) => (
@@ -233,6 +273,7 @@ function ReportsPage() {
                     <TableCell className="font-medium">{s.name}</TableCell>
                     <TableCell>{s.mobile}</TableCell>
                     <TableCell>{s.class}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{isHigherSecondary(s.class) ? streamLabel((s as unknown as { stream?: string }).stream) : "—"}</TableCell>
                     <TableCell>{s.board}</TableCell>
                     <TableCell>{s.medium}</TableCell>
                     <TableCell>{s.batch}</TableCell>
@@ -246,11 +287,21 @@ function ReportsPage() {
         </TabsContent>
 
         <TabsContent value="pending" className="mt-4 space-y-4">
-          <div className="flex justify-end">
+          <div className="flex justify-between items-center gap-2 flex-wrap">
+            <p className="text-xs text-muted-foreground">
+              Inherits Class & Stream filters from the Students tab.
+              {showStudentsStream && filterStream !== "all" && (
+                <> Showing <span className="font-semibold text-foreground">{streamLabel(filterStream)}</span> only.</>
+              )}
+            </p>
             <ExportButtons exporters={exportAll(
               "Pending Fees",
-              ["Name", "Class", "Total", "Paid", "Remaining"],
-              pendingData.map((s) => [s.name, s.class, s.total, s.paid, s.remaining]),
+              ["Name", "Class", "Stream", "Total", "Paid", "Remaining"],
+              pendingData.map((s) => [
+                s.name, s.class,
+                isHigherSecondary(s.class) ? streamLabel((s as unknown as { stream?: string }).stream) : "",
+                s.total, s.paid, s.remaining,
+              ]),
               "pending_fees"
             )} />
           </div>
@@ -259,13 +310,14 @@ function ReportsPage() {
             <CardContent className="p-0">
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>Name</TableHead><TableHead>Class</TableHead><TableHead className="text-right">Total</TableHead><TableHead className="text-right">Paid</TableHead><TableHead className="text-right">Remaining</TableHead>
+                  <TableHead>Name</TableHead><TableHead>Class</TableHead><TableHead>Stream</TableHead><TableHead className="text-right">Total</TableHead><TableHead className="text-right">Paid</TableHead><TableHead className="text-right">Remaining</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {pendingData.map((s) => (
                     <TableRow key={s.id}>
                       <TableCell className="font-medium">{s.name}</TableCell>
                       <TableCell>{s.class}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{isHigherSecondary(s.class) ? streamLabel((s as unknown as { stream?: string }).stream) : "—"}</TableCell>
                       <TableCell className="text-right">₹{s.total.toLocaleString("en-IN")}</TableCell>
                       <TableCell className="text-right">₹{s.paid.toLocaleString("en-IN")}</TableCell>
                       <TableCell className="text-right font-bold text-destructive">₹{s.remaining.toLocaleString("en-IN")}</TableCell>
@@ -333,10 +385,24 @@ function ReportsPage() {
                 {CLASSES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
+            {showAttStream && (
+              <Select value={attStream} onValueChange={(v) => setAttStream(v as StreamFilter)}>
+                <SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Streams</SelectItem>
+                  <SelectItem value="science">Science</SelectItem>
+                  <SelectItem value="commerce">Commerce</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
             <ExportButtons exporters={exportAll(
               `Attendance ${reportMonth}`,
-              ["Name", "Class", "Present", "Days", "%"],
-              attRows.map((r) => [r.name, r.class, r.present, r.totalDays, `${r.pct}%`]),
+              ["Name", "Class", "Stream", "Present", "Days", "%"],
+              attRows.map((r) => [
+                r.name, r.class,
+                isHigherSecondary(r.class) ? streamLabel((r as unknown as { stream?: string }).stream) : "",
+                r.present, r.totalDays, `${r.pct}%`,
+              ]),
               `attendance_${reportMonth}`
             )} />
           </div>
@@ -345,15 +411,16 @@ function ReportsPage() {
             <CardContent className="p-0">
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>Name</TableHead><TableHead>Class</TableHead><TableHead className="text-right">Present</TableHead><TableHead className="text-right">Days</TableHead><TableHead className="text-right">%</TableHead><TableHead className="text-right">Send</TableHead>
+                  <TableHead>Name</TableHead><TableHead>Class</TableHead><TableHead>Stream</TableHead><TableHead className="text-right">Present</TableHead><TableHead className="text-right">Days</TableHead><TableHead className="text-right">%</TableHead><TableHead className="text-right">Send</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {attRows.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-sm">No active students for this filter</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">No active students for this filter</TableCell></TableRow>
                   ) : attRows.map((r) => (
                     <TableRow key={r.id} className="hover:bg-muted/50">
                       <TableCell className="font-medium">{r.name}</TableCell>
                       <TableCell>{r.class}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{isHigherSecondary(r.class) ? streamLabel((r as unknown as { stream?: string }).stream) : "—"}</TableCell>
                       <TableCell className="text-right">{r.present}</TableCell>
                       <TableCell className="text-right">{r.totalDays}</TableCell>
                       <TableCell className={`text-right font-bold ${r.pct >= 75 ? "text-success" : r.pct >= 50 ? "text-warning-foreground" : "text-destructive"}`}>{r.pct}%</TableCell>

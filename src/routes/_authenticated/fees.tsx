@@ -93,13 +93,32 @@ function FeesPage() {
   const totalPending = useMemo(() => filtered.reduce((sum, s) => sum + Math.max(0, s.remaining), 0), [filtered]);
   const totalCollected = useMemo(() => ayPayments.reduce((sum, p) => sum + safeNum(p.amount), 0), [ayPayments]);
 
+  // Build a stream-aware reminder using the student's standardized class + actual remaining.
+  const buildReminderMessage = (s: typeof studentFees[0]) => {
+    const remaining = Math.max(0, s.remaining);
+    const streamLabel =
+      (s.class === "11th" || s.class === "12th") &&
+      (s.stream === "science" || s.stream === "commerce")
+        ? ` ${s.stream === "science" ? "Science" : "Commerce"}`
+        : "";
+    const classLabel = `${s.class}${streamLabel}`;
+    return `Hello ${s.name}, your pending fees for Yashshree Classes (${classLabel}) is ${inr(remaining)}. Please pay before ${nextDueLabel(s.fee_due_day)}. Thank you.`;
+  };
+
   const sendReminder = async (s: typeof studentFees[0]) => {
-    const msg = `Hello ${s.name}, your pending fees for Yashshree Classes is ${inr(s.remaining)}. Please pay before ${nextDueLabel(s.fee_due_day)}. Thank you.`;
+    if (s.remaining <= 0) { toast.info(`${s.name} has no pending fees`); return; }
+    const msg = buildReminderMessage(s);
     const url = buildWhatsappUrl(s.mobile, msg);
     if (!url) { toast.error(`Invalid mobile for ${s.name}`); return; }
     window.open(url, "_blank");
     await supabase.from("whatsapp_logs").insert({ student_id: s.id, message: msg, type: "reminder" });
-    await logAudit("whatsapp_sent", "whatsapp", s.id, { type: "reminder", remaining: s.remaining });
+    await logAudit("whatsapp_sent", "whatsapp", s.id, {
+      type: "reminder",
+      class: s.class,
+      stream: s.stream ?? "none",
+      due_day: s.fee_due_day,
+      remaining: Math.max(0, s.remaining),
+    });
     toast.success(`Reminder sent to ${s.name}`);
   };
 
@@ -121,7 +140,8 @@ function FeesPage() {
     const progressId = toast.loading(`Sending 0 / ${total}…`);
     try {
       for (const s of bulkPending) {
-        const msg = `Hello ${s.name}, your pending fees for Yashshree Classes is ${inr(s.remaining)}. Please pay before ${nextDueLabel(s.fee_due_day)}. Thank you.`;
+        if (s.remaining <= 0) continue;
+        const msg = buildReminderMessage(s);
         const url = buildWhatsappUrl(s.mobile, msg);
         if (!url) continue;
         window.open(url, "_blank");

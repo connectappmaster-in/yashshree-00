@@ -56,6 +56,7 @@ function StudentsPage() {
   const [filterClass, setFilterClass] = useState("all");
   const [filterBoard, setFilterBoard] = useState("all");
   const [filterMedium, setFilterMedium] = useState("all");
+  const [filterStream, setFilterStream] = useState<"all" | "science" | "commerce">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editStudent, setEditStudent] = useState<Tables<"students"> | null>(null);
@@ -136,12 +137,18 @@ function StudentsPage() {
     return ra - rb || a.name.localeCompare(b.name);
   });
 
+  const showStreamFilter = filterClass === "all" || isHigherSecondary(filterClass);
+  const effectiveStream = showStreamFilter ? filterStream : "all";
+
   const filtered = studentSummary.filter((s) => {
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.mobile.includes(search);
     const matchClass = filterClass === "all" || s.class === filterClass;
     const matchBoard = filterBoard === "all" || s.board === filterBoard;
     const matchMedium = filterMedium === "all" || s.medium === filterMedium;
-    return matchSearch && matchClass && matchBoard && matchMedium;
+    const matchStream =
+      effectiveStream === "all" ||
+      (isHigherSecondary(s.class) && (s as unknown as { stream?: string }).stream === effectiveStream);
+    return matchSearch && matchClass && matchBoard && matchMedium && matchStream;
   });
 
   const filterMediumOptions = filterBoard === "all" ? ALL_MEDIUMS : MEDIUMS_BY_BOARD[filterBoard as Board];
@@ -150,11 +157,16 @@ function StudentsPage() {
 
   const handleExport = async () => {
     exportCSV(
-      ["Name", "Mobile", "Class", "Board", "Medium", "Batch", "Total Fees", "Discount", "Paid", "Remaining", "Status"],
-      filtered.map((s) => [
-        s.name, s.mobile, s.class, s.board ?? "", s.medium, s.batch,
-        safeNum(s.total_fees), safeNum(s.discount), s.paid, s.remaining, s.status,
-      ]),
+      ["Name", "Mobile", "Class", "Stream", "Board", "Medium", "Batch", "Total Fees", "Discount", "Paid", "Remaining", "Status"],
+      filtered.map((s) => {
+        const st = (s as unknown as { stream?: string }).stream;
+        const streamCol = isHigherSecondary(s.class) && (st === "science" || st === "commerce")
+          ? (st === "science" ? "Science" : "Commerce") : "";
+        return [
+          s.name, s.mobile, s.class, streamCol, s.board ?? "", s.medium, s.batch,
+          safeNum(s.total_fees), safeNum(s.discount), s.paid, s.remaining, s.status,
+        ];
+      }),
       `students_${format(new Date(), "yyyy-MM-dd")}.csv`,
     );
     await logAudit("export", "student", null, { kind: "students", rows: filtered.length });
@@ -226,6 +238,16 @@ function StudentsPage() {
                     {filterMediumOptions.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
                   </SelectContent>
                 </Select>
+                {showStreamFilter && (
+                  <Select value={filterStream} onValueChange={(v) => setFilterStream(v as "all" | "science" | "commerce")}>
+                    <SelectTrigger className="w-[110px] h-8 text-xs"><SelectValue placeholder="Stream" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Streams</SelectItem>
+                      <SelectItem value="science">Science</SelectItem>
+                      <SelectItem value="commerce">Commerce</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -246,8 +268,8 @@ function StudentsPage() {
                       <TableRow><TableCell colSpan={3} className="text-center py-8 text-sm text-muted-foreground">Loading...</TableCell></TableRow>
                     ) : filtered.length === 0 ? (
                       <TableRow><TableCell colSpan={3} className="text-center py-8 text-sm text-muted-foreground">
-                        {(search || filterClass !== "all" || filterBoard !== "all" || filterMedium !== "all")
-                          ? <>No students match your filters. <button type="button" onClick={() => { setSearch(""); setFilterClass("all"); setFilterBoard("all"); setFilterMedium("all"); }} className="underline">Clear filters</button></>
+                        {(search || filterClass !== "all" || filterBoard !== "all" || filterMedium !== "all" || filterStream !== "all")
+                          ? <>No students match your filters. <button type="button" onClick={() => { setSearch(""); setFilterClass("all"); setFilterBoard("all"); setFilterMedium("all"); setFilterStream("all"); }} className="underline">Clear filters</button></>
                           : "No students found"}
                       </TableCell></TableRow>
                     ) : (
@@ -284,7 +306,7 @@ function StudentsPage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <h2 className="text-lg font-bold font-display">{selected.name}</h2>
-                      <p className="text-sm text-muted-foreground">{selected.mobile} • {selected.class} • {selected.board} {selected.medium} • {selected.batch} Batch</p>
+                      <p className="text-sm text-muted-foreground">{selected.mobile} • {selected.class}{isHigherSecondary(selected.class) && (selected as unknown as { stream?: string }).stream && (selected as unknown as { stream?: string }).stream !== "none" ? ` ${((selected as unknown as { stream?: string }).stream === "science" ? "Science" : "Commerce")}` : ""} • {selected.board} {selected.medium} • {selected.batch} Batch</p>
                       <p className="text-xs text-muted-foreground mt-1">Due Day: {selected.fee_due_day}th • Admitted: {format(new Date(selected.admission_date), "dd MMM yyyy")}</p>
                     </div>
                     <div className="flex gap-1">
@@ -535,6 +557,20 @@ function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"stu
       if (!/^\d{10}$/.test(mobile)) {
         throw new Error("Mobile number must be exactly 10 digits");
       }
+      if (isHigherSecondary(form.class) && form.stream === "none") {
+        throw new Error("Select a stream (Science or Commerce) for 11th/12th");
+      }
+      if (form.subjects.length === 0) {
+        throw new Error("Select at least one subject");
+      }
+      const allowed = new Set(getSubjectsFor(form.class, form.stream));
+      const invalid = form.subjects.filter((s) => !allowed.has(s));
+      if (invalid.length) {
+        const ctx = isHigherSecondary(form.class)
+          ? `${form.class} ${form.stream === "science" ? "Science" : "Commerce"}`
+          : form.class;
+        throw new Error(`Subjects not valid for ${ctx}: ${invalid.join(", ")}`);
+      }
       const ay = form.academic_year || deriveAcademicYear(form.admission_date);
       const payload = {
         name: form.name.trim(),
@@ -659,7 +695,7 @@ function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"stu
       </div>
       <div className="pt-2 flex items-center justify-between">
         <p className="text-sm text-muted-foreground">Final: <span className="font-bold text-foreground">₹{Math.max(0, finalFees).toLocaleString("en-IN")}</span></p>
-        <Button type="submit" className="bg-secondary text-secondary-foreground hover:bg-secondary/90" disabled={mutation.isPending}>
+        <Button type="submit" className="bg-secondary text-secondary-foreground hover:bg-secondary/90" disabled={mutation.isPending || form.subjects.length === 0 || (showStream && form.stream === "none")}>
           {mutation.isPending ? "Saving..." : student ? "Update" : "Add Student"}
         </Button>
       </div>
