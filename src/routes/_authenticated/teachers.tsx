@@ -445,7 +445,7 @@ function LectureForm({ teacherId, teachers, defaultYear, onSuccess }: { teacherI
   );
 }
 
-const CLASS_OPTIONS = ["5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th", "Other"];
+const CLASS_OPTIONS = [...CATALOG_CLASS_OPTIONS, "Other"];
 const BATCH_OPTIONS = ["morning", "evening"]; // Stored lowercase to match students.batch
 
 function TeacherClassesView({ teachers, year }: { teachers: Tables<"teachers">[]; year: string }) {
