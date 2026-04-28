@@ -557,6 +557,20 @@ function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"stu
       if (!/^\d{10}$/.test(mobile)) {
         throw new Error("Mobile number must be exactly 10 digits");
       }
+      if (isHigherSecondary(form.class) && form.stream === "none") {
+        throw new Error("Select a stream (Science or Commerce) for 11th/12th");
+      }
+      if (form.subjects.length === 0) {
+        throw new Error("Select at least one subject");
+      }
+      const allowed = new Set(getSubjectsFor(form.class, form.stream));
+      const invalid = form.subjects.filter((s) => !allowed.has(s));
+      if (invalid.length) {
+        const ctx = isHigherSecondary(form.class)
+          ? `${form.class} ${form.stream === "science" ? "Science" : "Commerce"}`
+          : form.class;
+        throw new Error(`Subjects not valid for ${ctx}: ${invalid.join(", ")}`);
+      }
       const ay = form.academic_year || deriveAcademicYear(form.admission_date);
       const payload = {
         name: form.name.trim(),
