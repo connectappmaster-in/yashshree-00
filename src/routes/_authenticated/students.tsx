@@ -56,6 +56,7 @@ function StudentsPage() {
   const [filterClass, setFilterClass] = useState("all");
   const [filterBoard, setFilterBoard] = useState("all");
   const [filterMedium, setFilterMedium] = useState("all");
+  const [filterStream, setFilterStream] = useState<"all" | "science" | "commerce">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editStudent, setEditStudent] = useState<Tables<"students"> | null>(null);
@@ -136,12 +137,18 @@ function StudentsPage() {
     return ra - rb || a.name.localeCompare(b.name);
   });
 
+  const showStreamFilter = filterClass === "all" || isHigherSecondary(filterClass);
+  const effectiveStream = showStreamFilter ? filterStream : "all";
+
   const filtered = studentSummary.filter((s) => {
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.mobile.includes(search);
     const matchClass = filterClass === "all" || s.class === filterClass;
     const matchBoard = filterBoard === "all" || s.board === filterBoard;
     const matchMedium = filterMedium === "all" || s.medium === filterMedium;
-    return matchSearch && matchClass && matchBoard && matchMedium;
+    const matchStream =
+      effectiveStream === "all" ||
+      (isHigherSecondary(s.class) && (s as unknown as { stream?: string }).stream === effectiveStream);
+    return matchSearch && matchClass && matchBoard && matchMedium && matchStream;
   });
 
   const filterMediumOptions = filterBoard === "all" ? ALL_MEDIUMS : MEDIUMS_BY_BOARD[filterBoard as Board];
