@@ -500,17 +500,25 @@ function StudentTestsView({ studentId, standard, tests, results }: { studentId: 
 }
 
 function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"students"> | null; defaultYear: string; onSuccess: () => void }) {
-  const initialBoard: Board = (student?.board === "CBSE" ? "CBSE" : "SSC");
+  const initialBoard: Board = (BOARDS as readonly string[]).includes(student?.board ?? "")
+    ? (student!.board as Board)
+    : "SSC";
   const initialMedium = student?.medium && MEDIUMS_BY_BOARD[initialBoard].includes(student.medium)
     ? student.medium
     : MEDIUMS_BY_BOARD[initialBoard][0];
+  const initialClass = student?.class || "10th";
+  const rawStream = (student as unknown as { stream?: string } | null)?.stream;
+  const initialStream: Stream = isHigherSecondary(initialClass)
+    ? (rawStream === "science" || rawStream === "commerce" ? rawStream : "science")
+    : "none";
   const [form, setForm] = useState({
     name: student?.name || "",
     mobile: student?.mobile || "",
-    class: student?.class || "10th",
+    class: initialClass,
     board: initialBoard as Board,
     medium: initialMedium,
-    subjects: student?.subjects || [],
+    stream: initialStream as Stream,
+    subjects: (student?.subjects as string[] | null) || [],
     admission_date: student?.admission_date || new Date().toISOString().split("T")[0],
     total_fees: student?.total_fees?.toString() || "",
     discount: student?.discount?.toString() || "0",
