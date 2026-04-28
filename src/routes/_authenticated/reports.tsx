@@ -240,17 +240,32 @@ function ReportsPage() {
                 {filterMediumOptions.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
               </SelectContent>
             </Select>
+            {showStudentsStream && (
+              <Select value={filterStream} onValueChange={(v) => setFilterStream(v as StreamFilter)}>
+                <SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Streams</SelectItem>
+                  <SelectItem value="science">Science</SelectItem>
+                  <SelectItem value="commerce">Commerce</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
             <ExportButtons exporters={exportAll(
               "Students List",
-              ["Name", "Mobile", "Class", "Board", "Medium", "Batch", "Fees", "Status"],
-              filteredStudents.map((s) => [s.name, s.mobile, s.class, s.board ?? "", s.medium, s.batch, Number(s.total_fees) - Number(s.discount), s.status]),
+              ["Name", "Mobile", "Class", "Stream", "Board", "Medium", "Batch", "Fees", "Status"],
+              filteredStudents.map((s) => [
+                s.name, s.mobile, s.class,
+                isHigherSecondary(s.class) ? streamLabel((s as unknown as { stream?: string }).stream) : "",
+                s.board ?? "", s.medium, s.batch,
+                Number(s.total_fees) - Number(s.discount), s.status,
+              ]),
               "students"
             )} />
           </div>
           <Card><CardContent className="p-0">
             <Table>
               <TableHeader><TableRow>
-                <TableHead>Name</TableHead><TableHead>Mobile</TableHead><TableHead>Class</TableHead><TableHead>Board</TableHead><TableHead>Medium</TableHead><TableHead>Batch</TableHead><TableHead>Fees</TableHead><TableHead>Status</TableHead>
+                <TableHead>Name</TableHead><TableHead>Mobile</TableHead><TableHead>Class</TableHead><TableHead>Stream</TableHead><TableHead>Board</TableHead><TableHead>Medium</TableHead><TableHead>Batch</TableHead><TableHead>Fees</TableHead><TableHead>Status</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {filteredStudents.map((s) => (
@@ -258,6 +273,7 @@ function ReportsPage() {
                     <TableCell className="font-medium">{s.name}</TableCell>
                     <TableCell>{s.mobile}</TableCell>
                     <TableCell>{s.class}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{isHigherSecondary(s.class) ? streamLabel((s as unknown as { stream?: string }).stream) : "—"}</TableCell>
                     <TableCell>{s.board}</TableCell>
                     <TableCell>{s.medium}</TableCell>
                     <TableCell>{s.batch}</TableCell>
