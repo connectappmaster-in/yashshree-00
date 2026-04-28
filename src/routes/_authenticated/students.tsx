@@ -571,7 +571,8 @@ function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"stu
   });
 
   const finalFees = safeNum(form.total_fees) - safeNum(form.discount);
-  const availableSubjects = SUBJECTS_BY_CLASS[form.class] || [];
+  const availableSubjects: string[] = getSubjectsFor(form.class, form.stream);
+  const showStream = isHigherSecondary(form.class);
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); mutation.mutate(); }} className="space-y-4">
