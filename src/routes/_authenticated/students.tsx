@@ -32,24 +32,19 @@ export const Route = createFileRoute("/_authenticated/students")({
   errorComponent: RouteError,
 });
 
-const CLASSES = ["5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th"];
-const BOARDS = ["CBSE", "SSC"] as const;
-type Board = (typeof BOARDS)[number];
-const MEDIUMS_BY_BOARD: Record<Board, string[]> = {
-  CBSE: ["English"],
-  SSC: ["Marathi", "Semi English", "English"],
-};
-const ALL_MEDIUMS = ["Marathi", "Semi English", "English"];
-const SUBJECTS_BY_CLASS: Record<string, string[]> = {
-  "5th": ["Maths", "Science", "English", "Hindi", "Social Science"],
-  "6th": ["Maths", "Science", "English", "Hindi", "Social Science"],
-  "7th": ["Maths", "Science", "English", "Hindi", "Social Science"],
-  "8th": ["Maths", "Science", "English", "Hindi", "Social Science"],
-  "9th": ["Maths", "Science", "English", "Hindi", "Social Science"],
-  "10th": ["Maths", "Science", "English", "Hindi", "Social Science"],
-  "11th": ["Physics", "Chemistry", "Maths", "Biology", "English", "Accountancy", "Economics", "Business Studies"],
-  "12th": ["Physics", "Chemistry", "Maths", "Biology", "English", "Accountancy", "Economics", "Business Studies"],
-};
+import {
+  BOARDS,
+  type Board,
+  MEDIUMS_BY_BOARD,
+  ALL_MEDIUMS,
+  CLASS_OPTIONS,
+  STREAM_OPTIONS,
+  type Stream,
+  getSubjectsFor,
+  isHigherSecondary,
+} from "@/lib/catalog";
+
+const CLASSES = CLASS_OPTIONS;
 const BATCHES = ["Morning", "Evening"];
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -505,17 +500,25 @@ function StudentTestsView({ studentId, standard, tests, results }: { studentId: 
 }
 
 function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"students"> | null; defaultYear: string; onSuccess: () => void }) {
-  const initialBoard: Board = (student?.board === "CBSE" ? "CBSE" : "SSC");
+  const initialBoard: Board = (BOARDS as readonly string[]).includes(student?.board ?? "")
+    ? (student!.board as Board)
+    : "SSC";
   const initialMedium = student?.medium && MEDIUMS_BY_BOARD[initialBoard].includes(student.medium)
     ? student.medium
     : MEDIUMS_BY_BOARD[initialBoard][0];
+  const initialClass = student?.class || "10th";
+  const rawStream = (student as unknown as { stream?: string } | null)?.stream;
+  const initialStream: Stream = isHigherSecondary(initialClass)
+    ? (rawStream === "science" || rawStream === "commerce" ? rawStream : "science")
+    : "none";
   const [form, setForm] = useState({
     name: student?.name || "",
     mobile: student?.mobile || "",
-    class: student?.class || "10th",
+    class: initialClass,
     board: initialBoard as Board,
     medium: initialMedium,
-    subjects: student?.subjects || [],
+    stream: initialStream as Stream,
+    subjects: (student?.subjects as string[] | null) || [],
     admission_date: student?.admission_date || new Date().toISOString().split("T")[0],
     total_fees: student?.total_fees?.toString() || "",
     discount: student?.discount?.toString() || "0",
@@ -540,6 +543,7 @@ function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"stu
         board: form.board,
         medium: form.medium,
         subjects: form.subjects,
+        stream: form.stream,
         admission_date: form.admission_date,
         total_fees: safeNum(form.total_fees),
         discount: safeNum(form.discount),
@@ -567,7 +571,8 @@ function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"stu
   });
 
   const finalFees = safeNum(form.total_fees) - safeNum(form.discount);
-  const availableSubjects = SUBJECTS_BY_CLASS[form.class] || [];
+  const availableSubjects: string[] = getSubjectsFor(form.class, form.stream);
+  const showStream = isHigherSecondary(form.class);
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); mutation.mutate(); }} className="space-y-4">
@@ -577,11 +582,27 @@ function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"stu
         <div className="space-y-1.5"><Label>Admission Date</Label><Input type="date" value={form.admission_date} onChange={(e) => setForm((f) => ({ ...f, admission_date: e.target.value, academic_year: deriveAcademicYear(e.target.value) }))} /></div>
         <div className="space-y-1.5">
           <Label>Class</Label>
-          <Select value={form.class} onValueChange={(v) => setForm((f) => ({ ...f, class: v, subjects: [] }))}>
+          <Select value={form.class} onValueChange={(v) => setForm((f) => ({
+            ...f,
+            class: v,
+            subjects: [],
+            stream: isHigherSecondary(v) ? (f.stream === "none" ? "science" : f.stream) : "none",
+          }))}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>{CLASSES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
           </Select>
         </div>
+        {showStream && (
+          <div className="space-y-1.5">
+            <Label>Stream</Label>
+            <Select value={form.stream} onValueChange={(v) => setForm((f) => ({ ...f, stream: v as Stream, subjects: [] }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {STREAM_OPTIONS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <div className="space-y-1.5">
           <Label>Board</Label>
           <Select value={form.board} onValueChange={(v) => {

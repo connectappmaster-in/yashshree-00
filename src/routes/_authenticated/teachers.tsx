@@ -21,6 +21,7 @@ import { useAcademicYear, deriveAcademicYear } from "@/lib/academic-year-context
 import { requireAdmin } from "@/lib/route-guards";
 import { logAudit } from "@/lib/audit";
 import { RouteError } from "@/components/RouteError";
+import { CLASS_OPTIONS as CATALOG_CLASS_OPTIONS } from "@/lib/catalog";
 
 export const Route = createFileRoute("/_authenticated/teachers")({
   beforeLoad: requireAdmin,
@@ -444,7 +445,7 @@ function LectureForm({ teacherId, teachers, defaultYear, onSuccess }: { teacherI
   );
 }
 
-const CLASS_OPTIONS = ["5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th", "Other"];
+const CLASS_OPTIONS = [...CATALOG_CLASS_OPTIONS, "Other"];
 const BATCH_OPTIONS = ["morning", "evening"]; // Stored lowercase to match students.batch
 
 function TeacherClassesView({ teachers, year }: { teachers: Tables<"teachers">[]; year: string }) {

@@ -27,14 +27,9 @@ export const Route = createFileRoute("/_authenticated/reports")({
   errorComponent: RouteError,
 });
 
-const CLASSES = ["5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th"];
-const BOARDS = ["CBSE", "SSC"] as const;
-type Board = (typeof BOARDS)[number];
-const MEDIUMS_BY_BOARD: Record<Board, string[]> = {
-  CBSE: ["English"],
-  SSC: ["Marathi", "Semi English", "English"],
-};
-const ALL_MEDIUMS = ["Marathi", "Semi English", "English"];
+import { BOARDS, type Board, MEDIUMS_BY_BOARD, ALL_MEDIUMS, CLASS_OPTIONS } from "@/lib/catalog";
+
+const CLASSES = CLASS_OPTIONS;
 type Frequency = "Weekly" | "Monthly" | "Quarterly" | "Yearly";
 
 function ReportsPage() {

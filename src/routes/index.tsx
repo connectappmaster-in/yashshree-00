@@ -165,17 +165,17 @@ function LandingPage() {
           </div>
           <div className="grid md:grid-cols-3 gap-6">
             <CourseCard
-              title="SSC / CBSE"
-              classes="8th, 9th, 10th"
+              title="SSC / CBSE / ICSE / IB"
+              classes="5th – 10th"
               icon={BookOpen}
-              subjects={["Maths", "Science", "English", "Social Science"]}
+              subjects={["Mathematics", "Science", "English", "Social Science"]}
               color="bg-gradient-to-br from-primary to-primary/80"
             />
             <CourseCard
               title="Commerce"
               classes="11th, 12th"
               icon={Target}
-              subjects={["Accountancy", "Economics", "Business Studies", "English"]}
+              subjects={["Accountancy", "Economics", "Secretarial Practice", "Organisation of Commerce"]}
               color="bg-gradient-to-br from-accent to-accent/80"
               badge="Morning & Evening Batches"
             />
@@ -183,7 +183,7 @@ function LandingPage() {
               title="Science"
               classes="11th, 12th"
               icon={Award}
-              subjects={["Physics", "Chemistry", "Maths", "Biology"]}
+              subjects={["Physics", "Chemistry", "Mathematics", "Biology"]}
               color="bg-gradient-to-br from-primary to-primary/80"
             />
           </div>
