@@ -582,11 +582,27 @@ function StudentForm({ student, defaultYear, onSuccess }: { student: Tables<"stu
         <div className="space-y-1.5"><Label>Admission Date</Label><Input type="date" value={form.admission_date} onChange={(e) => setForm((f) => ({ ...f, admission_date: e.target.value, academic_year: deriveAcademicYear(e.target.value) }))} /></div>
         <div className="space-y-1.5">
           <Label>Class</Label>
-          <Select value={form.class} onValueChange={(v) => setForm((f) => ({ ...f, class: v, subjects: [] }))}>
+          <Select value={form.class} onValueChange={(v) => setForm((f) => ({
+            ...f,
+            class: v,
+            subjects: [],
+            stream: isHigherSecondary(v) ? (f.stream === "none" ? "science" : f.stream) : "none",
+          }))}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>{CLASSES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
           </Select>
         </div>
+        {showStream && (
+          <div className="space-y-1.5">
+            <Label>Stream</Label>
+            <Select value={form.stream} onValueChange={(v) => setForm((f) => ({ ...f, stream: v as Stream, subjects: [] }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {STREAM_OPTIONS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <div className="space-y-1.5">
           <Label>Board</Label>
           <Select value={form.board} onValueChange={(v) => {
