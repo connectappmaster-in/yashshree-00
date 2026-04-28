@@ -198,6 +198,7 @@ export type Database = {
           mobile: string
           name: string
           status: string
+          stream: string
           subjects: string[]
           total_fees: number
         }
@@ -216,6 +217,7 @@ export type Database = {
           mobile: string
           name: string
           status?: string
+          stream?: string
           subjects?: string[]
           total_fees?: number
         }
@@ -234,6 +236,7 @@ export type Database = {
           mobile?: string
           name?: string
           status?: string
+          stream?: string
           subjects?: string[]
           total_fees?: number
         }
