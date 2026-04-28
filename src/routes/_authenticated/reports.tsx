@@ -27,9 +27,12 @@ export const Route = createFileRoute("/_authenticated/reports")({
   errorComponent: RouteError,
 });
 
-import { BOARDS, type Board, MEDIUMS_BY_BOARD, ALL_MEDIUMS, CLASS_OPTIONS } from "@/lib/catalog";
+import { BOARDS, type Board, MEDIUMS_BY_BOARD, ALL_MEDIUMS, CLASS_OPTIONS, isHigherSecondary } from "@/lib/catalog";
 
 const CLASSES = CLASS_OPTIONS;
+type StreamFilter = "all" | "science" | "commerce";
+const streamLabel = (s: string | null | undefined) =>
+  s === "science" ? "Science" : s === "commerce" ? "Commerce" : "";
 type Frequency = "Weekly" | "Monthly" | "Quarterly" | "Yearly";
 
 function ReportsPage() {
@@ -37,7 +40,9 @@ function ReportsPage() {
   const [filterClass, setFilterClass] = useState("all");
   const [filterBoard, setFilterBoard] = useState("all");
   const [filterMedium, setFilterMedium] = useState("all");
+  const [filterStream, setFilterStream] = useState<StreamFilter>("all");
   const [attClass, setAttClass] = useState("all");
+  const [attStream, setAttStream] = useState<StreamFilter>("all");
   const [reportMonth, setReportMonth] = useState(format(new Date(), "yyyy-MM"));
   const [waDialogOpen, setWaDialogOpen] = useState(false);
   const [waStudent, setWaStudent] = useState<{ id: string; name: string; mobile: string } | null>(null);
